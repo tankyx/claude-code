@@ -11,6 +11,10 @@ import { registerSkillifySkill } from './skillify.js'
 import { registerStuckSkill } from './stuck.js'
 import { registerUpdateConfigSkill } from './updateConfig.js'
 import { registerVerifySkill } from './verify.js'
+import { registerLeekScriptSkill } from './leekscript.js'
+import { registerLeekTestSkill } from './leekTest.js'
+import { registerLeekSyncSkill } from './leekSync.js'
+import { registerLeekOptimizeSkill } from './leekOptimize.js'
 
 /**
  * Initialize all bundled skills.
@@ -32,6 +36,10 @@ export function initBundledSkills(): void {
   registerSimplifySkill()
   registerBatchSkill()
   registerStuckSkill()
+  registerLeekScriptSkill()
+  registerLeekTestSkill()
+  registerLeekSyncSkill()
+  registerLeekOptimizeSkill()
   if (feature('KAIROS') || feature('KAIROS_DREAM')) {
     /* eslint-disable @typescript-eslint/no-require-imports */
     const { registerDreamSkill } = require('./dream.js')
