@@ -125,9 +125,24 @@ if (state == "RETREAT") {
     }
 }
 
+// Find weakest enemy (manual - no built-in function)
+function findWeakestEnemy() {
+    var enemies = getAliveEnemies()
+    var weakest = null
+    var minLife = 999999
+    for (var e in enemies) {
+        var life = getLife(e)
+        if (life != null and life < minLife) {
+            minLife = life
+            weakest = e
+        }
+    }
+    return weakest
+}
+
 // State actions
 if (state == "ENGAGE") {
-    var enemy = getWeakestEnemy()
+    var enemy = findWeakestEnemy()
     if (enemy != null) {
         targetId = enemy
         moveToward(enemy)
@@ -278,8 +293,16 @@ if (myRole == "TANK") {
         useWeapon(enemy)
     }
 } else if (myRole == "HEALER") {
-    // Heal most hurt ally
-    var weakest = getWeakestAlly()
+    // Find most hurt ally (manual - no built-in function)
+    var weakest = null
+    var minLife = 999999
+    for (var a in getAliveAllies()) {
+        var life = getLife(a)
+        if (life != null and life < minLife) {
+            minLife = life
+            weakest = a
+        }
+    }
     if (weakest != null and getLife(weakest) < getTotalLife(weakest) * 0.8) {
         moveToward(weakest)
         for (var chip in getChips()) {
@@ -294,8 +317,16 @@ if (myRole == "TANK") {
         }
     }
 } else if (myRole == "DPS") {
-    // Focus fire weakest enemy
-    var enemy = getWeakestEnemy()
+    // Focus fire weakest enemy (manual - no built-in function)
+    var enemy = null
+    var minLife = 999999
+    for (var e in getAliveEnemies()) {
+        var life = getLife(e)
+        if (life != null and life < minLife) {
+            minLife = life
+            enemy = e
+        }
+    }
     if (enemy != null) {
         moveToward(enemy)
         while (getTP() >= getWeaponCost(getWeapon()) and canUseWeapon(getWeapon(), enemy)) {
