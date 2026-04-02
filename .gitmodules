@@ -1,0 +1,6 @@
+[submodule "vendor/leekscript"]
+	path = vendor/leekscript
+	url = https://github.com/leek-wars/leekscript.git
+[submodule "vendor/leek-wars-generator"]
+	path = vendor/leek-wars-generator
+	url = https://github.com/leek-wars/leek-wars-generator.git

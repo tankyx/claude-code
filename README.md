@@ -126,6 +126,9 @@ Add to your settings (`.claude/settings.json`):
 │   ├── tools/                            # Tool implementations (Bash, Read, Edit, etc.)
 │   ├── services/mcp/                     # MCP client
 │   └── ...                               # Core infrastructure (unchanged)
+├── vendor/                               # Git submodules (ground-truth references)
+│   ├── leekscript/                       # LeekScript compiler (Java)
+│   └── leek-wars-generator/              # LeekWars fight engine & game data
 ├── mcp-leekwars-server/
 │   ├── server.js                         # MCP server for LeekWars REST API
 │   ├── package.json
@@ -136,6 +139,59 @@ Add to your settings (`.claude/settings.json`):
 │   └── CLAUDE.md.leekscript             # CLAUDE.md template for LeekScript projects
 └── README.md
 ```
+
+---
+
+## Reference Submodules
+
+Two official LeekWars repositories are included as git submodules under `vendor/`, providing ground-truth references for the LeekScript language and game engine.
+
+```bash
+# Clone with submodules
+git clone --recurse-submodules <repo-url>
+
+# Or initialize after cloning
+git submodule update --init --recursive
+```
+
+### `vendor/leekscript` — LeekScript Compiler
+
+Source: [github.com/leek-wars/leekscript](https://github.com/leek-wars/leekscript)
+
+The production LeekScript compiler (Java). Contains:
+
+| Path | What it provides |
+|------|------------------|
+| `src/main/java/leekscript/compiler/` | Lexer, parser, token types — the **definitive syntax reference** |
+| `src/main/java/leekscript/compiler/expression/` | All expression types (binary, unary, array access, etc.) |
+| `src/main/java/leekscript/compiler/instruction/` | All instruction types (if, for, while, return, etc.) |
+| `src/main/java/leekscript/compiler/bloc/` | Block types (function, class, main) |
+| `src/main/java/leekscript/runner/values/` | Runtime value types (Array, Map, String, Number, etc.) |
+| `src/main/java/leekscript/runner/classes/` | Built-in class definitions |
+| `src/test/resources/ai/` | Example `.leek` test scripts |
+
+### `vendor/leek-wars-generator` — Fight Engine & Game Data
+
+Source: [github.com/leek-wars/leek-wars-generator](https://github.com/leek-wars/leek-wars-generator)
+
+The LeekWars fight simulator. Contains:
+
+| Path | What it provides |
+|------|------------------|
+| `data/functions.json` | **All LeekScript API functions** with operations costs |
+| `data/weapons.json` | All weapon stats (damage, range, TP cost, area) |
+| `data/chips.json` | All chip stats (effects, range, cooldown, TP cost) |
+| `data/summons.json` | Summon entity definitions |
+| `data/components.json` | Component definitions |
+| `src/.../FightFunctions.java` | **Complete function implementation** — the authoritative API reference |
+| `src/.../FightConstants.java` | All game constants (effect types, areas, cell types) |
+| `src/.../weapons/` | Weapon class hierarchy |
+| `src/.../chips/` | Chip class hierarchy |
+| `src/.../entity/` | Entity model (leek stats, equipment, effects) |
+| `src/.../fight/` | Fight logic (turn order, damage calculation, LoS) |
+| `src/.../maps/` | Map generation and cell topology |
+
+These submodules serve as the **source of truth** when Claude needs to verify function signatures, game constants, damage formulas, or any behavior not covered by the bundled skill reference docs.
 
 ---
 
