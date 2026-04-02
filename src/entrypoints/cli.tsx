@@ -1,5 +1,11 @@
 import { feature } from 'bun:bundle';
 
+// lwcode: Use separate config directory (~/.lwcode) to avoid conflicts with
+// regular Claude Code (~/.claude). This ensures both can coexist with
+// independent settings, skills, credentials, and MCP server configs.
+// eslint-disable-next-line custom-rules/no-top-level-side-effects, custom-rules/no-process-env-top-level
+process.env.CLAUDE_CONFIG_DIR ??= require('path').join(require('os').homedir(), '.lwcode');
+
 // Bugfix for corepack auto-pinning, which adds yarnpkg to peoples' package.jsons
 // eslint-disable-next-line custom-rules/no-top-level-side-effects
 process.env.COREPACK_ENABLE_AUTO_PIN = '0';
