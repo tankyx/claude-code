@@ -33,33 +33,48 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 
 const API_BASE = 'https://leekwars.com/api'
-let authToken = process.env.LEEKWARS_TOKEN || null
+let authToken = null
+
+// Cookie jar — the LeekWars API uses session cookies for auth.
+// After login, the server sets cookies that must be sent with every request.
+// This matches the working Python `requests.Session()` approach.
+let sessionCookies = ''
 
 async function apiRequest(method, path, body = null) {
   const url = `${API_BASE}${path}`
   const headers = {}
-  const options = { method, headers }
+
+  // Send session cookies with every request (like requests.Session)
+  if (sessionCookies) {
+    headers['Cookie'] = sessionCookies
+  }
+
+  const options = { method, headers, redirect: 'manual' }
 
   if (method === 'POST') {
     headers['Content-Type'] = 'application/x-www-form-urlencoded'
     const params = new URLSearchParams()
-    // Inject auth token into POST body (LeekWars v2.31+ convention)
-    if (authToken) {
-      params.append('token', authToken)
-    }
     if (body) {
       for (const [key, value] of Object.entries(body)) {
         params.append(key, String(value))
       }
     }
     options.body = params.toString()
-  } else {
-    // GET requests: append token as query param if needed
-    const separator = path.includes('?') ? '&' : '/'
-    // Some GET endpoints accept token as last path segment
   }
 
   const response = await fetch(url, options)
+
+  // Capture Set-Cookie headers to maintain session
+  const setCookies = response.headers.getSetCookie?.() || []
+  if (setCookies.length > 0) {
+    const newCookies = setCookies
+      .map(c => c.split(';')[0])
+      .join('; ')
+    sessionCookies = sessionCookies
+      ? sessionCookies + '; ' + newCookies
+      : newCookies
+  }
+
   if (!response.ok) {
     throw new Error(`API error ${response.status}: ${response.statusText}`)
   }
@@ -171,6 +186,18 @@ const TOOLS = [
     },
   },
   {
+    name: 'leekwars_get_leek_opponents',
+    description:
+      'Get available solo opponents for a specific leek. Returns a list of opponent leeks you can fight.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        leek_id: { type: 'number', description: 'Your leek ID' },
+      },
+      required: ['leek_id'],
+    },
+  },
+  {
     name: 'leekwars_start_fight',
     description:
       'Start a solo fight against an opponent leek. Returns fight ID.',
@@ -264,28 +291,38 @@ const TOOLS = [
 async function handleToolCall(name, args) {
   switch (name) {
     case 'leekwars_login': {
-      const result = await apiRequest('POST', '/farmer/login', {
+      // Uses /farmer/login-token (matches working Python code)
+      const result = await apiRequest('POST', '/farmer/login-token', {
         login: args.login,
         password: args.password,
       })
       if (result.token) {
         authToken = result.token
-        return `Login successful. Token stored for this session. Farmer: ${result.farmer?.name || 'unknown'}`
+        const farmer = result.farmer || {}
+        return [
+          `Login successful!`,
+          `Farmer: ${farmer.login || 'unknown'} (ID: ${farmer.id || '?'})`,
+          `Habs: ${farmer.habs || 0}`,
+          `Stats: ${farmer.victories || 0}V / ${farmer.draws || 0}D / ${farmer.defeats || 0}L`,
+          `Available fights: ${farmer.fights || 0}`,
+          `Leeks: ${Object.values(farmer.leeks || {}).map(l => `${l.name} (Lvl ${l.level})`).join(', ') || 'none'}`,
+        ].join('\n')
       }
       return `Login failed: ${JSON.stringify(result)}`
     }
 
     case 'leekwars_list_ais': {
-      const result = await apiRequest('POST', '/ai/get-farmer-ais')
+      // GET with session cookies (matches working Python code)
+      const result = await apiRequest('GET', '/ai/get-farmer-ais')
       const ais = result.ais || []
       if (ais.length === 0) return 'No AIs found.'
       return ais
-        .map((ai) => `[${ai.id}] ${ai.name} (${ai.valid ? 'valid' : 'invalid'})`)
+        .map((ai) => `[${ai.id}] ${ai.name} (folder: ${ai.folder}, ${ai.valid ? 'valid' : 'invalid'})`)
         .join('\n')
     }
 
     case 'leekwars_get_ai': {
-      const result = await apiRequest('POST', '/ai/get', { ai_id: args.ai_id })
+      const result = await apiRequest('GET', `/ai/get/${args.ai_id}`)
       const ai = result.ai || result
       return `# AI: ${ai.name} (ID: ${ai.id})\nValid: ${ai.valid}\nVersion: ${ai.version || 'unknown'}\n\n## Code:\n\`\`\`leekscript\n${ai.code || '(empty)'}\n\`\`\``
     }
@@ -328,7 +365,7 @@ async function handleToolCall(name, args) {
     }
 
     case 'leekwars_get_leek': {
-      const result = await apiRequest('POST', '/leek/get', { leek_id: args.leek_id })
+      const result = await apiRequest('GET', `/leek/get/${args.leek_id}`)
       const leek = result.leek || result
       return [
         `# ${leek.name} (ID: ${leek.id})`,
@@ -358,6 +395,19 @@ async function handleToolCall(name, args) {
         : `Failed: ${JSON.stringify(result)}`
     }
 
+    case 'leekwars_get_leek_opponents': {
+      // GET with path param (matches working Python: /garden/get-leek-opponents/{leek_id})
+      const result = await apiRequest('GET', `/garden/get-leek-opponents/${args.leek_id}`)
+      const opponents = result.opponents || []
+      if (opponents.length === 0) return 'No opponents available.'
+      return opponents
+        .map(
+          (o) =>
+            `[${o.id}] ${o.name} - Level ${o.level}, Talent ${o.talent || '?'}`,
+        )
+        .join('\n')
+    }
+
     case 'leekwars_start_fight': {
       const result = await apiRequest('POST', '/garden/start-solo-fight', {
         leek_id: args.leek_id,
@@ -374,7 +424,8 @@ async function handleToolCall(name, args) {
     }
 
     case 'leekwars_get_fight': {
-      const result = await apiRequest('POST', '/fight/get', { fight_id: args.fight_id })
+      // GET with path param (matches working Python code)
+      const result = await apiRequest('GET', `/fight/get/${args.fight_id}`)
       const fight = result.fight || result
       return [
         `# Fight ${fight.id}`,
@@ -395,7 +446,8 @@ async function handleToolCall(name, args) {
     }
 
     case 'leekwars_get_garden': {
-      const result = await apiRequest('POST', '/garden/get')
+      // GET with session cookies (matches working Python code)
+      const result = await apiRequest('GET', '/garden/get')
       const opponents = result.enemies || result.solos || []
       if (opponents.length === 0) return 'No opponents available.'
       return opponents
@@ -408,8 +460,11 @@ async function handleToolCall(name, args) {
     }
 
     case 'leekwars_get_farmer': {
-      const body = args.farmer_id ? { farmer_id: args.farmer_id } : {}
-      const result = await apiRequest('POST', '/farmer/get', body)
+      // GET with session cookies (matches working Python code)
+      const path = args.farmer_id
+        ? `/farmer/get/${args.farmer_id}`
+        : '/farmer/get'
+      const result = await apiRequest('GET', path)
       const farmer = result.farmer || result
       return [
         `# ${farmer.name} (ID: ${farmer.id})`,
@@ -420,17 +475,13 @@ async function handleToolCall(name, args) {
     }
 
     case 'leekwars_get_constants': {
-      const result = await apiRequest('POST', '/constant/get-all')
+      const result = await apiRequest('GET', '/constant/get-all')
       return JSON.stringify(result, null, 2).slice(0, 5000) + '\n...(truncated)'
     }
 
     case 'leekwars_get_ranking': {
       const page = args.page || 1
-      const result = await apiRequest('POST', '/ranking/get', {
-        type: args.type,
-        order: args.order,
-        page,
-      })
+      const result = await apiRequest('GET', `/ranking/get/${args.type}/${args.order}/${page}`)
       const rankings = result.rankings || []
       return rankings
         .slice(0, 20)
