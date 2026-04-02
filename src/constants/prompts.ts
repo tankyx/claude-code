@@ -689,7 +689,7 @@ export async function computeSimpleEnvInfo(
     process.env.USER_TYPE === 'ant' && isUndercover()
       ? null
       : `The most recent Claude model family is Claude 4.5/4.6. Model IDs — Opus 4.6: '${CLAUDE_4_5_OR_4_6_MODEL_IDS.opus}', Sonnet 4.6: '${CLAUDE_4_5_OR_4_6_MODEL_IDS.sonnet}', Haiku 4.5: '${CLAUDE_4_5_OR_4_6_MODEL_IDS.haiku}'. When building AI applications, default to the latest and most capable Claude models.`,
-    `This is LeekWars Code — a specialized build of Claude Code focused entirely on LeekScript programming for the LeekWars game. LeekScript files use .lk, .leek, .ls, .lks, or .leekscript extensions.`,
+    `This is LeekWars Code (lwcode) — a specialized build focused entirely on LeekScript programming for the LeekWars game. LeekScript files use .lk, .leek, .ls, .lks, or .leekscript extensions.`,
     `LeekWars documentation: https://leekwars.com/help/documentation, API: https://leekwars.com/api/, Encyclopedia: https://leekwars.com/encyclopedia/en/LeekScript`,
   ].filter(item => item !== null)
 
@@ -746,7 +746,7 @@ export function getUnameSR(): string {
   return `${osType()} ${osRelease()}`
 }
 
-export const DEFAULT_AGENT_PROMPT = `You are an agent for Claude Code, Anthropic's official CLI for Claude. Given the user's message, you should use the tools available to complete the task. Complete the task fully—don't gold-plate, but don't leave it half-done. When you complete the task, respond with a concise report covering what was done and any key findings — the caller will relay this to the user, so it only needs the essentials.`
+export const DEFAULT_AGENT_PROMPT = `You are an agent for LeekWars Code, a LeekScript programming assistant for the LeekWars game. Given the user's message, you should use the tools available to complete the task. Complete the task fully—don't gold-plate, but don't leave it half-done. When you complete the task, respond with a concise report covering what was done and any key findings — the caller will relay this to the user, so it only needs the essentials.`
 
 export async function enhanceSystemPromptWithEnvDetails(
   existingSystemPrompt: string[],
