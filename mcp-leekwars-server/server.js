@@ -529,5 +529,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 })
 
+// Auto-login if credentials are provided via environment variables
+// (set by setup.sh in ~/.claude/settings.json mcpServers.leekwars.env)
+if (process.env.LEEKWARS_LOGIN && process.env.LEEKWARS_PASSWORD) {
+  try {
+    const result = apiRequest('POST', '/farmer/login-token', {
+      login: process.env.LEEKWARS_LOGIN,
+      password: process.env.LEEKWARS_PASSWORD,
+    })
+    if (result.token) {
+      authToken = result.token
+      const farmer = result.farmer || {}
+      process.stderr.write(
+        `[leekwars-mcp] Auto-logged in as ${farmer.login || 'unknown'} ` +
+        `(${Object.keys(farmer.leeks || {}).length} leeks)\n`
+      )
+    }
+  } catch {
+    process.stderr.write('[leekwars-mcp] Auto-login failed. Use leekwars_login tool.\n')
+  }
+}
+
 const transport = new StdioServerTransport()
 await server.connect(transport)
