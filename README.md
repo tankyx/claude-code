@@ -1,257 +1,228 @@
-# Claude Code — Leaked Source (2026-03-31)
+# LeekWars Code — AI Programming Assistant for LeekWars
 
-> **On March 31, 2026, the full source code of Anthropic's Claude Code CLI was leaked** via a `.map` file exposed in their npm registry.
-
----
-
-## How It Leaked
-
-[Chaofan Shou (@Fried_rice)](https://x.com/Fried_rice) discovered the leak and posted it publicly:
-
-> **"Claude code source code has been leaked via a map file in their npm registry!"**
->
-> — [@Fried_rice, March 31, 2026](https://x.com/Fried_rice/status/2038894956459290963)
-
-The source map file in the published npm package contained a reference to the full, unobfuscated TypeScript source, which was downloadable as a zip archive from Anthropic's R2 storage bucket.
+> A specialized fork of Claude Code, stripped down and rebuilt to be a **LeekScript-only programming assistant** for the [LeekWars](https://leekwars.com) turn-based combat game.
 
 ---
 
-## Overview
+## What is this?
 
-Claude Code is Anthropic's official CLI tool that lets you interact with Claude directly from the terminal to perform software engineering tasks — editing files, running commands, searching codebases, managing git workflows, and more.
+LeekWars Code is a CLI tool that connects you to Claude for writing, debugging, optimizing, and deploying **LeekScript AI scripts** — the language used in LeekWars to program autonomous fighting leeks.
 
-This repository contains the leaked `src/` directory.
+This is **not** a general-purpose coding assistant. Every prompt, skill, and integration is laser-focused on LeekWars.
 
-- **Leaked on**: 2026-03-31
-- **Language**: TypeScript
-- **Runtime**: Bun
-- **Terminal UI**: React + [Ink](https://github.com/vadimdemedes/ink) (React for CLI)
-- **Scale**: ~1,900 files, 512,000+ lines of code
+### What it does
+
+- **Writes LeekScript AI** — from simple fighters to advanced state-machine strategies with team coordination
+- **Knows the full LeekWars API** — 200+ functions across movement, combat, targeting, map, effects, summons, and utility categories
+- **Understands game mechanics** — TP/MP budgets, operations limits, turn order, stat scaling, weapon/chip ranges, cooldowns, line of sight
+- **Optimizes for competitive play** — TP efficiency, operations budget, target selection, positioning, team composition
+- **Syncs with LeekWars** — pull/push AI code, start test fights, get fight results (via MCP server)
 
 ---
 
-## Directory Structure
+## Quick Start
 
-```
-src/
-├── main.tsx                 # Entrypoint (Commander.js-based CLI parser)
-├── commands.ts              # Command registry
-├── tools.ts                 # Tool registry
-├── Tool.ts                  # Tool type definitions
-├── QueryEngine.ts           # LLM query engine (core Anthropic API caller)
-├── context.ts               # System/user context collection
-├── cost-tracker.ts          # Token cost tracking
-│
-├── commands/                # Slash command implementations (~50)
-├── tools/                   # Agent tool implementations (~40)
-├── components/              # Ink UI components (~140)
-├── hooks/                   # React hooks
-├── services/                # External service integrations
-├── screens/                 # Full-screen UIs (Doctor, REPL, Resume)
-├── types/                   # TypeScript type definitions
-├── utils/                   # Utility functions
-│
-├── bridge/                  # IDE integration bridge (VS Code, JetBrains)
-├── coordinator/             # Multi-agent coordinator
-├── plugins/                 # Plugin system
-├── skills/                  # Skill system
-├── keybindings/             # Keybinding configuration
-├── vim/                     # Vim mode
-├── voice/                   # Voice input
-├── remote/                  # Remote sessions
-├── server/                  # Server mode
-├── memdir/                  # Memory directory (persistent memory)
-├── tasks/                   # Task management
-├── state/                   # State management
-├── migrations/              # Config migrations
-├── schemas/                 # Config schemas (Zod)
-├── entrypoints/             # Initialization logic
-├── ink/                     # Ink renderer wrapper
-├── buddy/                   # Companion sprite (Easter egg)
-├── native-ts/               # Native TypeScript utils
-├── outputStyles/            # Output styling
-├── query/                   # Query pipeline
-└── upstreamproxy/           # Proxy configuration
+```bash
+# Run LeekWars Code in your AI scripts directory
+claude
+
+# Use built-in skills
+/leekscript          # Full API reference and language guide
+/leek-test           # Static analysis of your AI code
+/leek-optimize       # 3-agent parallel optimization review
+/leek-sync           # Sync code with LeekWars platform
+
+# Ask naturally
+> Write me a kiter AI that maintains max weapon range and retreats after attacking
+> My AI is wasting TP — can you optimize the attack loop?
+> Add a healing mode that triggers when HP drops below 30%
+> Explain what getNearestEnemy() vs getWeakestEnemy() does
 ```
 
 ---
 
-## Core Architecture
+## LeekScript Skills
 
-### 1. Tool System (`src/tools/`)
+| Skill | Command | Description |
+|-------|---------|-------------|
+| **LeekScript Expert** | `/leekscript` | Full language reference, API docs, 8 AI pattern templates |
+| **AI Tester** | `/leek-test` | Static analysis for null safety, TP waste, operations budget, dead code |
+| **AI Optimizer** | `/leek-optimize` | Parallel 3-agent review: operations efficiency, TP/MP optimization, strategy & tactics |
+| **Platform Sync** | `/leek-sync` | Pull/push AI code between local `.lk` files and LeekWars platform |
+| **Debug** | `/debug` | Debug session issues |
+| **Verify** | `/verify` | Verify task completion |
+| **Remember** | `/remember` | Save project context to memory |
 
-Every tool Claude Code can invoke is implemented as a self-contained module. Each tool defines its input schema, permission model, and execution logic.
+---
+
+## LeekWars MCP Server
+
+The included MCP server (`mcp-leekwars-server/`) connects Claude directly to the LeekWars REST API.
+
+### Setup
+
+```bash
+cd mcp-leekwars-server && npm install
+```
+
+Add to your settings (`.claude/settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "leekwars": {
+      "command": "node",
+      "args": ["./mcp-leekwars-server/server.js"],
+      "env": {
+        "LEEKWARS_TOKEN": "your-token-here"
+      }
+    }
+  }
+}
+```
+
+### Available MCP Tools
 
 | Tool | Description |
-|---|---|
-| `BashTool` | Shell command execution |
-| `FileReadTool` | File reading (images, PDFs, notebooks) |
-| `FileWriteTool` | File creation / overwrite |
-| `FileEditTool` | Partial file modification (string replacement) |
-| `GlobTool` | File pattern matching search |
-| `GrepTool` | ripgrep-based content search |
-| `WebFetchTool` | Fetch URL content |
-| `WebSearchTool` | Web search |
-| `AgentTool` | Sub-agent spawning |
-| `SkillTool` | Skill execution |
-| `MCPTool` | MCP server tool invocation |
-| `LSPTool` | Language Server Protocol integration |
-| `NotebookEditTool` | Jupyter notebook editing |
-| `TaskCreateTool` / `TaskUpdateTool` | Task creation and management |
-| `SendMessageTool` | Inter-agent messaging |
-| `TeamCreateTool` / `TeamDeleteTool` | Team agent management |
-| `EnterPlanModeTool` / `ExitPlanModeTool` | Plan mode toggle |
-| `EnterWorktreeTool` / `ExitWorktreeTool` | Git worktree isolation |
-| `ToolSearchTool` | Deferred tool discovery |
-| `CronCreateTool` | Scheduled trigger creation |
-| `RemoteTriggerTool` | Remote trigger |
-| `SleepTool` | Proactive mode wait |
-| `SyntheticOutputTool` | Structured output generation |
-
-### 2. Command System (`src/commands/`)
-
-User-facing slash commands invoked with `/` prefix.
-
-| Command | Description |
-|---|---|
-| `/commit` | Create a git commit |
-| `/review` | Code review |
-| `/compact` | Context compression |
-| `/mcp` | MCP server management |
-| `/config` | Settings management |
-| `/doctor` | Environment diagnostics |
-| `/login` / `/logout` | Authentication |
-| `/memory` | Persistent memory management |
-| `/skills` | Skill management |
-| `/tasks` | Task management |
-| `/vim` | Vim mode toggle |
-| `/diff` | View changes |
-| `/cost` | Check usage cost |
-| `/theme` | Change theme |
-| `/context` | Context visualization |
-| `/pr_comments` | View PR comments |
-| `/resume` | Restore previous session |
-| `/share` | Share session |
-| `/desktop` | Desktop app handoff |
-| `/mobile` | Mobile app handoff |
-
-### 3. Service Layer (`src/services/`)
-
-| Service | Description |
-|---|---|
-| `api/` | Anthropic API client, file API, bootstrap |
-| `mcp/` | Model Context Protocol server connection and management |
-| `oauth/` | OAuth 2.0 authentication flow |
-| `lsp/` | Language Server Protocol manager |
-| `analytics/` | GrowthBook-based feature flags and analytics |
-| `plugins/` | Plugin loader |
-| `compact/` | Conversation context compression |
-| `policyLimits/` | Organization policy limits |
-| `remoteManagedSettings/` | Remote managed settings |
-| `extractMemories/` | Automatic memory extraction |
-| `tokenEstimation.ts` | Token count estimation |
-| `teamMemorySync/` | Team memory synchronization |
-
-### 4. Bridge System (`src/bridge/`)
-
-A bidirectional communication layer connecting IDE extensions (VS Code, JetBrains) with the Claude Code CLI.
-
-- `bridgeMain.ts` — Bridge main loop
-- `bridgeMessaging.ts` — Message protocol
-- `bridgePermissionCallbacks.ts` — Permission callbacks
-- `replBridge.ts` — REPL session bridge
-- `jwtUtils.ts` — JWT-based authentication
-- `sessionRunner.ts` — Session execution management
-
-### 5. Permission System (`src/hooks/toolPermission/`)
-
-Checks permissions on every tool invocation. Either prompts the user for approval/denial or automatically resolves based on the configured permission mode (`default`, `plan`, `bypassPermissions`, `auto`, etc.).
-
-### 6. Feature Flags
-
-Dead code elimination via Bun's `bun:bundle` feature flags:
-
-```typescript
-import { feature } from 'bun:bundle'
-
-// Inactive code is completely stripped at build time
-const voiceCommand = feature('VOICE_MODE')
-  ? require('./commands/voice/index.js').default
-  : null
-```
-
-Notable flags: `PROACTIVE`, `KAIROS`, `BRIDGE_MODE`, `DAEMON`, `VOICE_MODE`, `AGENT_TRIGGERS`, `MONITOR_TOOL`
+|------|-------------|
+| `leekwars_login` | Authenticate with LeekWars |
+| `leekwars_list_ais` | List all your AI scripts |
+| `leekwars_get_ai` | Get AI source code by ID |
+| `leekwars_save_ai` | Save/update AI code |
+| `leekwars_new_ai` | Create a new AI |
+| `leekwars_delete_ai` | Delete an AI |
+| `leekwars_rename_ai` | Rename an AI |
+| `leekwars_get_leek` | Get leek stats and equipment |
+| `leekwars_set_leek_ai` | Assign AI to a leek |
+| `leekwars_start_fight` | Start a solo fight |
+| `leekwars_start_farmer_fight` | Start a farmer fight |
+| `leekwars_get_fight` | Get fight results and replay |
+| `leekwars_get_garden` | Browse available opponents |
+| `leekwars_get_farmer` | Get farmer profile |
+| `leekwars_get_constants` | Get all game constants |
+| `leekwars_get_ranking` | Get rankings |
 
 ---
 
-## Key Files in Detail
+## Project Structure
 
-### `QueryEngine.ts` (~46K lines)
+```
+├── src/
+│   ├── main.tsx                          # CLI entrypoint
+│   ├── QueryEngine.ts                    # LLM query engine (Anthropic API)
+│   ├── constants/
+│   │   └── prompts.ts                    # System prompts (LeekWars-focused)
+│   ├── skills/bundled/
+│   │   ├── index.ts                      # Skill registry (LeekWars + utility only)
+│   │   ├── leekscript.ts                 # /leekscript skill
+│   │   ├── leekscriptContent.ts          # API reference content loader
+│   │   ├── leekscript/
+│   │   │   ├── SKILL.md                  # Skill prompt
+│   │   │   ├── api-reference.md          # Full LeekWars API reference
+│   │   │   └── patterns.md              # 8 AI strategy patterns
+│   │   ├── leekTest.ts                   # /leek-test skill
+│   │   ├── leekSync.ts                   # /leek-sync skill
+│   │   └── leekOptimize.ts              # /leek-optimize skill
+│   ├── tools/                            # Tool implementations (Bash, Read, Edit, etc.)
+│   ├── services/mcp/                     # MCP client
+│   └── ...                               # Core infrastructure (unchanged)
+├── mcp-leekwars-server/
+│   ├── server.js                         # MCP server for LeekWars REST API
+│   ├── package.json
+│   └── README.md
+├── .claude/skills/
+│   └── leekscript.md                     # Disk-based auto-trigger skill
+├── templates/
+│   └── CLAUDE.md.leekscript             # CLAUDE.md template for LeekScript projects
+└── README.md
+```
 
-The core engine for LLM API calls. Handles streaming responses, tool-call loops, thinking mode, retry logic, and token counting.
+---
 
-### `Tool.ts` (~29K lines)
+## What Was Changed from Base Claude Code
 
-Defines base types and interfaces for all tools — input schemas, permission models, and progress state types.
+### System Prompt (src/constants/prompts.ts)
 
-### `commands.ts` (~25K lines)
+| Section | Change |
+|---------|--------|
+| **Identity** | "LeekWars Code" — LeekScript specialist, not general SE assistant |
+| **Intro** | Includes LeekScript language overview (syntax, operators, types, constraints) |
+| **Doing tasks** | LeekScript-specific: TP/MP budgets, null-checking, `global` state, operations limits, AI structure, team composition |
+| **Actions** | Scoped to LeekWars risks: overwriting live AI, starting ranked fights, deleting scripts |
+| **Tone/style** | Exact API function names, `leekscript` code fences, game mechanic precision |
+| **Output** | Code-first responses, strategy-focused |
+| **Environment** | LeekWars documentation URLs, file extension recognition |
 
-Manages registration and execution of all slash commands. Uses conditional imports to load different command sets per environment.
+### Skills (src/skills/bundled/index.ts)
 
-### `main.tsx`
+**Added:** `leekscript`, `leek-test`, `leek-sync`, `leek-optimize`
 
-Commander.js-based CLI parser + React/Ink renderer initialization. At startup, parallelizes MDM settings, keychain prefetch, and GrowthBook initialization for faster boot.
+**Removed:** batch, simplify, skillify, keybindings, loremIpsum, claudeInChrome, claudeApi, dream, hunter, loop, scheduleRemoteAgents, runSkillGenerator
+
+**Kept:** debug, verify, stuck, remember, updateConfig (utility skills still useful)
+
+### New Files
+
+- **4 bundled skills** with full LeekScript API reference (200+ functions), 8 AI pattern templates, optimization framework
+- **MCP server** with 16 tools for LeekWars REST API
+- **Disk-based skill** (`.claude/skills/leekscript.md`) for automatic LeekScript detection
+- **CLAUDE.md template** for LeekScript projects
+
+---
+
+## LeekScript at a Glance
+
+```leekscript
+// Variables
+var x = 10              // mutable
+let y = 20              // constant
+global state = "ATTACK" // persists across turns
+
+// Functional operators
+var doubled = [1, 2, 3] ~~ x -> x * 2      // map: [2, 4, 6]
+var evens = [1, 2, 3, 4] \ x -> x % 2 == 0 // filter: [2, 4]
+var result = 3 ~ x -> x ** x                // pipe: 27
+
+// Basic AI
+var enemy = getNearestEnemy()
+if (enemy != null) {
+    moveToward(enemy)
+    while (getTP() >= getWeaponCost(getWeapon()) and canUseWeapon(getWeapon(), enemy)) {
+        useWeapon(enemy)
+    }
+}
+```
+
+File extensions: `.lk`, `.leek`, `.ls`, `.lks`, `.leekscript`
 
 ---
 
 ## Tech Stack
 
 | Category | Technology |
-|---|---|
+|----------|------------|
 | Runtime | [Bun](https://bun.sh) |
 | Language | TypeScript (strict) |
 | Terminal UI | [React](https://react.dev) + [Ink](https://github.com/vadimdemedes/ink) |
-| CLI Parsing | [Commander.js](https://github.com/tj/commander.js) (extra-typings) |
-| Schema Validation | [Zod v4](https://zod.dev) |
-| Code Search | [ripgrep](https://github.com/BurntSushi/ripgrep) (via GrepTool) |
+| LLM API | [Anthropic SDK](https://docs.anthropic.com) |
 | Protocols | [MCP SDK](https://modelcontextprotocol.io), LSP |
-| API | [Anthropic SDK](https://docs.anthropic.com) |
-| Telemetry | OpenTelemetry + gRPC |
-| Feature Flags | GrowthBook |
-| Auth | OAuth 2.0, JWT, macOS Keychain |
+| Schema Validation | [Zod v4](https://zod.dev) |
+| Game Platform | [LeekWars](https://leekwars.com) |
 
 ---
 
-## Notable Design Patterns
+## Links
 
-### Parallel Prefetch
-
-Startup time is optimized by prefetching MDM settings, keychain reads, and API preconnect in parallel — before heavy module evaluation begins.
-
-```typescript
-// main.tsx — fired as side-effects before other imports
-startMdmRawRead()
-startKeychainPrefetch()
-```
-
-### Lazy Loading
-
-Heavy modules (OpenTelemetry ~400KB, gRPC ~700KB) are deferred via dynamic `import()` until actually needed.
-
-### Agent Swarms
-
-Sub-agents are spawned via `AgentTool`, with `coordinator/` handling multi-agent orchestration. `TeamCreateTool` enables team-level parallel work.
-
-### Skill System
-
-Reusable workflows defined in `skills/` and executed through `SkillTool`. Users can add custom skills.
-
-### Plugin Architecture
-
-Built-in and third-party plugins are loaded through the `plugins/` subsystem.
+- **LeekWars**: https://leekwars.com
+- **LeekScript Docs**: https://leekwars.com/help/documentation
+- **LeekScript Encyclopedia**: https://leekwars.com/encyclopedia/en/LeekScript
+- **LeekWars API**: https://leekwars.com/help/api
+- **LeekWars GitHub**: https://github.com/leek-wars
+- **LeekScript (Java)**: https://github.com/leek-wars/leekscript
+- **LeekScript-next (C++/LLVM)**: https://github.com/leek-wars/leekscript-next
 
 ---
 
-## Disclaimer
+## Base Source
 
-This repository archives source code that was leaked from Anthropic's npm registry on **2026-03-31**. All original source code is the property of [Anthropic](https://www.anthropic.com).
+This project is built on top of the Claude Code source (leaked 2026-03-31 via npm source map). The core infrastructure (QueryEngine, tools, MCP client, permissions, UI) is from the original codebase. All LeekWars-specific additions are in the files listed above.

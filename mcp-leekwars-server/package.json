@@ -1,0 +1,13 @@
+{
+  "name": "mcp-leekwars-server",
+  "version": "1.0.0",
+  "description": "MCP server for LeekWars API integration with Claude Code",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}
