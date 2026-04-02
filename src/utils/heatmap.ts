@@ -154,10 +154,10 @@ export function generateHeatmap(
   lines.push(
     '    Less ' +
       [
-        claudeOrange('░'),
-        claudeOrange('▒'),
-        claudeOrange('▓'),
-        claudeOrange('█'),
+        leekGreen('░'),
+        leekGreen('▒'),
+        leekGreen('▓'),
+        leekGreen('█'),
       ].join(' ') +
       ' More',
   )
@@ -177,21 +177,21 @@ function getIntensity(
   return 1
 }
 
-// Claude orange color (hex #da7756)
-const claudeOrange = chalk.hex('#da7756')
+// Leek green color (hex #4CAF50)
+const leekGreen = chalk.hex('#4CAF50')
 
 function getHeatmapChar(intensity: number): string {
   switch (intensity) {
     case 0:
       return chalk.gray('·')
     case 1:
-      return claudeOrange('░')
+      return leekGreen('░')
     case 2:
-      return claudeOrange('▒')
+      return leekGreen('▒')
     case 3:
-      return claudeOrange('▓')
+      return leekGreen('▓')
     case 4:
-      return claudeOrange('█')
+      return leekGreen('█')
     default:
       return chalk.gray('·')
   }
