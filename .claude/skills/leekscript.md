@@ -29,6 +29,8 @@ the LeekWars game engine with a **20 million operations limit** per turn.
 ### Variable Declarations
 ```leekscript
 var x = 10           // mutable variable
+let y = 20           // constant (cannot be reassigned)
+const z = 30         // constant, accessible everywhere
 var name = "Leek"    // string
 var arr = [1, 2, 3]  // array
 var map = ["a": 1, "b": 2]  // map (associative array)
@@ -46,14 +48,18 @@ global myGlobal = 0  // persists across turns
 
 ### Operators
 ```leekscript
-// Arithmetic: + - * / % **
+// Arithmetic: + - * / % ** ++ --
 // Comparison: == != < > <= >= === !==
-// Logical: and or not ! && ||
+// Logical: and or not xor ! && ||
 // Bitwise: & | ^ ~ << >>
 // String: + (concatenation)
-// Functional: ~~ (map), \ (filter), -> (lambda)
+// Functional: ~~ (map), \ (filter), -> (lambda), ~ (pipe)
 // Type: is, instanceof
+// Swap: <=> (swap two variables)
+// Null coalescing: ??
 // Ternary: condition ? a : b
+// Absolute/length: |expr| (e.g., |-5| or |array|)
+// Membership: x in array
 ```
 
 ### Control Flow
@@ -115,12 +121,24 @@ class Fighter {
 }
 ```
 
+### Module System
+```leekscript
+include('shared_utilities')  // import another AI script by name
+```
+
 ### Important Notes
 - Semicolons are optional (newlines act as statement terminators)
-- `global` variables persist between turns (critical for AI state management)
+- `var` for mutable, `let`/`const` for constants, `global` for cross-turn persistence
 - The `~~` operator maps a function over an array
 - The `\` operator filters an array
+- The `~` operator pipes a value into a function: `3 ~ x -> x ** x`
 - `->` creates lambda functions
+- `<=>` swaps two variables: `a <=> b`
+- `??` null coalescing: `value ?? default`
+- `getOperations()` returns current operations count (budget is ~20M per turn)
+- `include('name')` imports shared AI scripts
+- Parentheses in `if`/`while`/`for` are optional
+- Array comprehension: `[for var i = 0; i < 5; ++i { i }]`
 
 ## LeekWars API - Complete Function Reference
 
@@ -273,6 +291,11 @@ class Fighter {
 | Function | Description |
 |----------|-------------|
 | `getTurn()` | Current turn number |
+| `getEntity()` | Your own entity ID |
+| `getOperations()` | Current operations count |
+| `include(name)` | Import another AI script |
+| `listen()` | Listen for messages from allies |
+| `clone(value)` | Deep clone a value |
 | `getType(value)` | Type of value as number |
 | `typeOf(value)` | Type of value as string |
 | `count(array)` | Length of array |

@@ -4,20 +4,24 @@ This project contains LeekScript AI scripts for [LeekWars](https://leekwars.com)
 
 ## Project Structure
 
-- `*.lk` / `*.leekscript` - LeekScript AI source files
+- `*.lk` / `*.leek` / `*.ls` / `*.lks` - LeekScript AI source files
 - Each file is a standalone AI script that controls a leek in combat
 
 ## Language: LeekScript
 
 LeekScript is a dynamically typed language with JavaScript-like syntax.
 Key differences from JavaScript:
-- Use `var` for variables, `global` for state persisting across turns
-- `and` / `or` logical operators (in addition to `&&` / `||`)
+- `var` for mutable variables, `let`/`const` for constants, `global` for cross-turn state
+- `and` / `or` / `not` / `xor` logical operators (in addition to `&&` / `||` / `!`)
 - `~~` is the map operator: `array ~~ x -> x * 2`
 - `\` is the filter operator: `array \ x -> x > 0`
+- `~` is the pipe operator: `3 ~ x -> x ** x`
 - `->` creates lambdas: `x -> x + 1`
+- `<=>` swap operator: `a <=> b`
+- `??` null coalescing operator
+- `include('other_ai')` to import shared AI scripts
 - Semicolons are optional
-- No `let`/`const`, only `var` and `global`
+- `getOperations()` to check operations budget usage
 
 ## Game Constraints
 
