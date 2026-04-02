@@ -6,24 +6,56 @@
 
 ## Quick Start
 
-### Prerequisites
+There are two ways to use lwcode: as an **overlay** on your existing Claude Code, or as a **standalone binary**.
 
-- [Node.js](https://nodejs.org/) 18+
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI (`npm install -g @anthropic-ai/claude-code`)
-- A [LeekWars](https://leekwars.com) account
+### Option A: Standalone binary (recommended)
 
-### Install
+Build lwcode as its own binary that runs alongside your regular `claude` install.
+
+**Prerequisites:** [Bun](https://bun.sh/) 1.1+, [curl](https://curl.se/), a [LeekWars](https://leekwars.com) account
 
 ```bash
 git clone --recurse-submodules https://github.com/tankyx/claude-code.git
 cd claude-code
-./setup.sh
+./build.sh
 ```
 
-The script will ask for your LeekWars username and password, test them against the live API, and configure everything automatically. You can also pass them directly:
+This compiles 3954 modules into a single ~116 MB binary at `dist/lwcode`.
+
+```bash
+# Install globally (optional)
+sudo cp dist/lwcode /usr/local/bin/
+
+# Run
+lwcode --version          # 1.0.0 (LeekWars Code)
+lwcode --help             # Full CLI help
+cd ~/my-leek-scripts
+lwcode                    # Start interactive session
+```
+
+Then run `setup.sh` to configure your LeekWars credentials and MCP server:
 
 ```bash
 ./setup.sh YourUsername YourPassword
+```
+
+### Option B: Overlay on Claude Code
+
+Use your existing Claude Code installation — `setup.sh` adds the LeekWars MCP server and skills on top.
+
+**Prerequisites:** [Node.js](https://nodejs.org/) 18+, [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI (`npm install -g @anthropic-ai/claude-code`), a [LeekWars](https://leekwars.com) account
+
+```bash
+git clone --recurse-submodules https://github.com/tankyx/claude-code.git
+cd claude-code
+./setup.sh YourUsername YourPassword
+```
+
+Then use `claude` as usual — it automatically has LeekWars capabilities:
+
+```bash
+cd ~/my-leek-scripts
+claude
 ```
 
 ### What `setup.sh` does
@@ -34,17 +66,6 @@ The script will ask for your LeekWars username and password, test them against t
 4. Registers the MCP server in `~/.claude/settings.json` (auto-login on startup)
 5. Installs the LeekScript skill to `~/.claude/skills/leekscript.md`
 6. Creates a `CLAUDE.md` in your project directory if `.lk` files are detected
-
-### Use
-
-```bash
-cd ~/my-leek-scripts
-claude    # lwcode runs through your existing Claude Code installation
-```
-
-That's it. Claude now knows LeekScript, has access to your LeekWars account, and can read/write `.lk` files.
-
-> **Note:** `lwcode` works as an overlay on your existing Claude Code installation. The `setup.sh` script configures Claude Code with the LeekWars MCP server and LeekScript skill — so you run `claude` as usual, and it automatically has LeekWars capabilities. Your standard Claude Code usage is unaffected in other directories.
 
 ---
 
@@ -146,7 +167,10 @@ File extensions: `.lk`, `.leek`, `.ls`, `.lks`, `.leekscript`
 
 ```
 claude-code/
-├── setup.sh                              # One-command setup
+├── build.sh                              # Build standalone lwcode binary
+├── setup.sh                              # Configure credentials + MCP server
+├── package.json                          # Dependencies (60+ npm packages)
+├── dist/lwcode                           # Compiled binary (after build.sh)
 ├── mcp-leekwars-server/
 │   └── server.js                         # MCP server (17 LeekWars API tools)
 ├── .claude/skills/
@@ -157,6 +181,8 @@ claude-code/
 │   ├── leekscript/                       # LeekScript compiler source (Java)
 │   └── leek-wars-generator/              # Fight engine + game data (weapons, chips, constants)
 ├── src/
+│   ├── entrypoints/cli.tsx               # CLI entrypoint
+│   ├── main.tsx                          # Main application (Commander.js CLI)
 │   ├── constants/prompts.ts              # System prompts (LeekWars-focused)
 │   ├── skills/bundled/
 │   │   ├── leekscript.ts                 # /leekscript skill
@@ -190,9 +216,13 @@ Claude reads these files directly when it needs to verify a function signature o
 
 ---
 
-## Reconfigure
+## Build & Reconfigure
 
 ```bash
+# Build standalone binary
+./build.sh                    # produces dist/lwcode (~116 MB)
+./build.sh 2.0.0              # custom version number
+
 # Change credentials
 ./setup.sh NewUsername NewPassword
 
@@ -203,6 +233,12 @@ nano ~/.claude/leekwars-credentials.json
 cd mcp-leekwars-server
 echo '{}' | LEEKWARS_LOGIN=You LEEKWARS_PASSWORD=Pass node server.js
 ```
+
+### Build requirements
+
+- [Bun](https://bun.sh/) 1.1+ (used for bundling and compilation)
+- ~2 GB disk space (node_modules + build output)
+- Build time: ~2 seconds
 
 ---
 
