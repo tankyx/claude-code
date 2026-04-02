@@ -41,7 +41,7 @@ Then run `setup.sh` to configure your LeekWars credentials and MCP server:
 
 ### Option B: Overlay on Claude Code
 
-Use your existing Claude Code installation — `setup.sh` adds the LeekWars MCP server and skills on top.
+Use your existing Claude Code installation with `CLAUDE_CONFIG_DIR` pointed at lwcode's config.
 
 **Prerequisites:** [Node.js](https://nodejs.org/) 18+, [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI (`npm install -g @anthropic-ai/claude-code`), a [LeekWars](https://leekwars.com) account
 
@@ -51,20 +51,22 @@ cd claude-code
 ./setup.sh YourUsername YourPassword
 ```
 
-Then use `claude` as usual — it automatically has LeekWars capabilities:
+Then run claude with the lwcode config:
 
 ```bash
 cd ~/my-leek-scripts
-claude
+CLAUDE_CONFIG_DIR=~/.lwcode claude
 ```
+
+> **Note:** lwcode uses `~/.lwcode/` for all its config (settings, skills, credentials). Your regular `claude` uses `~/.claude/` — they never overlap.
 
 ### What `setup.sh` does
 
 1. Installs MCP server dependencies (`mcp-leekwars-server/`)
 2. Tests your LeekWars credentials against the live API
-3. Saves credentials to `~/.claude/leekwars-credentials.json` (mode 600, local only)
-4. Registers the MCP server in `~/.claude/settings.json` (auto-login on startup)
-5. Installs the LeekScript skill to `~/.claude/skills/leekscript.md`
+3. Saves credentials to `~/.lwcode/leekwars-credentials.json` (mode 600, local only)
+4. Registers the MCP server in `~/.lwcode/settings.json` (auto-login on startup)
+5. Installs the LeekScript skill to `~/.lwcode/skills/leekscript.md`
 6. Creates a `CLAUDE.md` in your project directory if `.lk` files are detected
 
 ---
@@ -227,7 +229,7 @@ Claude reads these files directly when it needs to verify a function signature o
 ./setup.sh NewUsername NewPassword
 
 # Or edit directly
-nano ~/.claude/leekwars-credentials.json
+nano ~/.lwcode/leekwars-credentials.json
 
 # Manual MCP server test
 cd mcp-leekwars-server

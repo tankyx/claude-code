@@ -7,10 +7,8 @@ import {
   envDetector,
   hostDetector,
   osDetector,
-  Resource,
+  resourceFromAttributes,
 } from '@opentelemetry/resources'
-// Shim: resourceFromAttributes was added in OTel 1.31, we have 1.30
-const resourceFromAttributes = (attrs: Record<string, unknown>) => new Resource(attrs as Record<string, string>)
 import {
   BatchLogRecordProcessor,
   ConsoleLogRecordExporter,

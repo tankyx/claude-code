@@ -14,7 +14,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MCP_DIR="$SCRIPT_DIR/mcp-leekwars-server"
-CLAUDE_HOME="${CLAUDE_CONFIG_HOME:-$HOME/.claude}"
+CLAUDE_HOME="${CLAUDE_CONFIG_DIR:-$HOME/.lwcode}"
 SKILLS_DIR="$CLAUDE_HOME/skills"
 SETTINGS_FILE="$CLAUDE_HOME/settings.json"
 
