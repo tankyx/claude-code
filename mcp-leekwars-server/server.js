@@ -32,53 +32,48 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js'
 
+import { execSync } from 'node:child_process'
+
 const API_BASE = 'https://leekwars.com/api'
 let authToken = null
 
-// Cookie jar — the LeekWars API uses session cookies for auth.
-// After login, the server sets cookies that must be sent with every request.
-// This matches the working Python `requests.Session()` approach.
-let sessionCookies = ''
+// Cookie jar file — the LeekWars API uses session cookies for auth.
+// curl's --cookie-jar / --cookie flags maintain session automatically,
+// matching the working Python `requests.Session()` approach.
+const COOKIE_JAR = '/tmp/leekwars-cookies.txt'
 
-async function apiRequest(method, path, body = null) {
+function apiRequest(method, path, body = null) {
   const url = `${API_BASE}${path}`
-  const headers = {}
 
-  // Send session cookies with every request (like requests.Session)
-  if (sessionCookies) {
-    headers['Cookie'] = sessionCookies
-  }
-
-  const options = { method, headers, redirect: 'manual' }
+  // Build curl command
+  const args = [
+    'curl', '-s', '--max-time', '15',
+    '-b', COOKIE_JAR,   // send cookies
+    '-c', COOKIE_JAR,   // save cookies
+  ]
 
   if (method === 'POST') {
-    headers['Content-Type'] = 'application/x-www-form-urlencoded'
-    const params = new URLSearchParams()
+    args.push('-X', 'POST')
     if (body) {
+      const params = new URLSearchParams()
       for (const [key, value] of Object.entries(body)) {
         params.append(key, String(value))
       }
+      args.push('-d', params.toString())
     }
-    options.body = params.toString()
   }
 
-  const response = await fetch(url, options)
+  args.push(url)
 
-  // Capture Set-Cookie headers to maintain session
-  const setCookies = response.headers.getSetCookie?.() || []
-  if (setCookies.length > 0) {
-    const newCookies = setCookies
-      .map(c => c.split(';')[0])
-      .join('; ')
-    sessionCookies = sessionCookies
-      ? sessionCookies + '; ' + newCookies
-      : newCookies
-  }
+  // Shell-escape and execute
+  const cmd = args.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')
+  const result = execSync(cmd, { timeout: 20000, encoding: 'utf-8' })
 
-  if (!response.ok) {
-    throw new Error(`API error ${response.status}: ${response.statusText}`)
+  try {
+    return JSON.parse(result)
+  } catch {
+    throw new Error(`Invalid JSON response from ${method} ${path}: ${result.slice(0, 200)}`)
   }
-  return response.json()
 }
 
 const TOOLS = [
