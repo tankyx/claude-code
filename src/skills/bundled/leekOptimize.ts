@@ -14,6 +14,11 @@ Find and read all .lk / .leekscript files in the current directory.
 Use the ${AGENT_TOOL_NAME} tool to launch three review agents in parallel.
 Pass each agent the full AI source code.
 
+**Ground truth reference**: If you need to verify function signatures, operations costs, or constant values, Read from:
+- \`vendor/leek-wars-generator/src/main/java/com/leekwars/generator/FightFunctions.java\` (API functions)
+- \`vendor/leek-wars-generator/data/functions.json\` (operations cost per function)
+- \`vendor/leek-wars-generator/src/main/java/com/leekwars/generator/FightConstants.java\` (constants)
+
 ### Agent 1: Operations Efficiency
 
 Review for computational efficiency (20M operations limit):
