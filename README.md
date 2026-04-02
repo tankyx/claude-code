@@ -1,26 +1,18 @@
-# LeekWars Code — AI Programming Assistant for LeekWars
+# LeekWars Code
 
-> A specialized fork of Claude Code, stripped down and rebuilt to be a **LeekScript-only programming assistant** for the [LeekWars](https://leekwars.com) turn-based combat game.
-
----
-
-## What is this?
-
-LeekWars Code is a CLI tool that connects you to Claude for writing, debugging, optimizing, and deploying **LeekScript AI scripts** — the language used in LeekWars to program autonomous fighting leeks.
-
-This is **not** a general-purpose coding assistant. Every prompt, skill, and integration is laser-focused on LeekWars.
-
-### What it does
-
-- **Writes LeekScript AI** — from simple fighters to advanced state-machine strategies with team coordination
-- **Knows the full LeekWars API** — 200+ functions across movement, combat, targeting, map, effects, summons, and utility categories
-- **Understands game mechanics** — TP/MP budgets, operations limits, turn order, stat scaling, weapon/chip ranges, cooldowns, line of sight
-- **Optimizes for competitive play** — TP efficiency, operations budget, target selection, positioning, team composition
-- **Syncs with LeekWars** — pull/push AI code, start test fights, get fight results (via MCP server)
+> Claude Code + LeekWars. Write, debug, optimize, and deploy LeekScript AI — all from the terminal.
 
 ---
 
-## Setup (one command)
+## Quick Start
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) 18+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI (`npm install -g @anthropic-ai/claude-code`)
+- A [LeekWars](https://leekwars.com) account
+
+### Install
 
 ```bash
 git clone --recurse-submodules https://github.com/tankyx/claude-code.git
@@ -28,83 +20,78 @@ cd claude-code
 ./setup.sh
 ```
 
-The setup script will:
-1. Install MCP server dependencies
-2. Ask for your LeekWars credentials and test them
-3. Register the MCP server in your Claude Code config (`~/.claude/settings.json`)
-4. Install the LeekScript skill globally (`~/.claude/skills/leekscript.md`)
-5. Optionally create a `CLAUDE.md` in your project directory
-
-You can also pass credentials directly: `./setup.sh MyUsername MyPassword`
-
-Credentials are saved to `~/.claude/leekwars-credentials.json` (mode 600) and the MCP server auto-logs in on startup.
-
-## Quick Start
+The script will ask for your LeekWars username and password, test them against the live API, and configure everything automatically. You can also pass them directly:
 
 ```bash
-# Run Claude Code in your AI scripts directory
+./setup.sh YourUsername YourPassword
+```
+
+### What `setup.sh` does
+
+1. Installs MCP server dependencies (`mcp-leekwars-server/`)
+2. Tests your LeekWars credentials against the live API
+3. Saves credentials to `~/.claude/leekwars-credentials.json` (mode 600, local only)
+4. Registers the MCP server in `~/.claude/settings.json` (auto-login on startup)
+5. Installs the LeekScript skill to `~/.claude/skills/leekscript.md`
+6. Creates a `CLAUDE.md` in your project directory if `.lk` files are detected
+
+### Use
+
+```bash
+cd ~/my-leek-scripts
 claude
+```
 
-# Use built-in skills
-/leekscript          # Full API reference and language guide
-/leek-test           # Static analysis of your AI code
-/leek-optimize       # 3-agent parallel optimization review
-/leek-sync           # Sync code with LeekWars platform
+That's it. Claude now knows LeekScript, has access to your LeekWars account, and can read/write `.lk` files.
 
-# Ask naturally
+---
+
+## What can it do?
+
+**Write AI from scratch:**
+```
 > Write me a kiter AI that maintains max weapon range and retreats after attacking
-> My AI is wasting TP — can you optimize the attack loop?
-> Add a healing mode that triggers when HP drops below 30%
-> Explain what getNearestEnemy() vs getWeakestEnemy() does
+```
+
+**Debug existing scripts:**
+```
+> My AI is wasting TP — can you find the bug in main.lk?
+```
+
+**Manage your account:**
+```
+> Show my leeks and their stats
+> List my AI scripts
+> Pull the source code for main.lk
+> Save this AI and start a test fight against my garden opponents
+```
+
+**Optimize for competition:**
+```
+> /leek-optimize      # 3-agent parallel review of your AI
+> /leek-test          # Static analysis for common bugs
 ```
 
 ---
 
-## LeekScript Skills
+## Available Skills
 
-| Skill | Command | Description |
-|-------|---------|-------------|
-| **LeekScript Expert** | `/leekscript` | Full language reference, API docs, 8 AI pattern templates |
-| **AI Tester** | `/leek-test` | Static analysis for null safety, TP waste, operations budget, dead code |
-| **AI Optimizer** | `/leek-optimize` | Parallel 3-agent review: operations efficiency, TP/MP optimization, strategy & tactics |
-| **Platform Sync** | `/leek-sync` | Pull/push AI code between local `.lk` files and LeekWars platform |
-| **Debug** | `/debug` | Debug session issues |
-| **Verify** | `/verify` | Verify task completion |
-| **Remember** | `/remember` | Save project context to memory |
+| Command | What it does |
+|---------|-------------|
+| `/leekscript` | Full LeekScript API reference (197 functions, 400+ constants from source) |
+| `/leek-test` | Static analysis: null safety, TP waste, invalid syntax, non-existent functions |
+| `/leek-optimize` | Parallel optimization: operations efficiency, TP/MP usage, strategy review |
+| `/leek-sync` | Pull/push AI code between local `.lk` files and LeekWars |
 
 ---
 
-## LeekWars MCP Server
+## MCP Tools (17)
 
-The included MCP server (`mcp-leekwars-server/`) connects Claude directly to the LeekWars REST API.
-
-### Setup
-
-```bash
-cd mcp-leekwars-server && npm install
-```
-
-Add to your settings (`.claude/settings.json`):
-
-```json
-{
-  "mcpServers": {
-    "leekwars": {
-      "command": "node",
-      "args": ["./mcp-leekwars-server/server.js"],
-      "env": {
-        "LEEKWARS_TOKEN": "your-token-here"
-      }
-    }
-  }
-}
-```
-
-### Available MCP Tools
+Automatically available after setup. No manual configuration needed.
 
 | Tool | Description |
 |------|-------------|
-| `leekwars_login` | Authenticate with LeekWars |
+| `leekwars_login` | Authenticate (auto-runs on startup) |
 | `leekwars_list_ais` | List all your AI scripts |
 | `leekwars_get_ai` | Get AI source code by ID |
 | `leekwars_save_ai` | Save/update AI code |
@@ -113,6 +100,7 @@ Add to your settings (`.claude/settings.json`):
 | `leekwars_rename_ai` | Rename an AI |
 | `leekwars_get_leek` | Get leek stats and equipment |
 | `leekwars_set_leek_ai` | Assign AI to a leek |
+| `leekwars_get_leek_opponents` | Get matchmaking opponents for a leek |
 | `leekwars_start_fight` | Start a solo fight |
 | `leekwars_start_farmer_fight` | Start a farmer fight |
 | `leekwars_get_fight` | Get fight results and replay |
@@ -123,148 +111,28 @@ Add to your settings (`.claude/settings.json`):
 
 ---
 
-## Project Structure
-
-```
-├── src/
-│   ├── main.tsx                          # CLI entrypoint
-│   ├── QueryEngine.ts                    # LLM query engine (Anthropic API)
-│   ├── constants/
-│   │   └── prompts.ts                    # System prompts (LeekWars-focused)
-│   ├── skills/bundled/
-│   │   ├── index.ts                      # Skill registry (LeekWars + utility only)
-│   │   ├── leekscript.ts                 # /leekscript skill
-│   │   ├── leekscriptContent.ts          # API reference content loader
-│   │   ├── leekscript/
-│   │   │   ├── SKILL.md                  # Skill prompt
-│   │   │   ├── api-reference.md          # Full LeekWars API reference
-│   │   │   └── patterns.md              # 8 AI strategy patterns
-│   │   ├── leekTest.ts                   # /leek-test skill
-│   │   ├── leekSync.ts                   # /leek-sync skill
-│   │   └── leekOptimize.ts              # /leek-optimize skill
-│   ├── tools/                            # Tool implementations (Bash, Read, Edit, etc.)
-│   ├── services/mcp/                     # MCP client
-│   └── ...                               # Core infrastructure (unchanged)
-├── vendor/                               # Git submodules (ground-truth references)
-│   ├── leekscript/                       # LeekScript compiler (Java)
-│   └── leek-wars-generator/              # LeekWars fight engine & game data
-├── mcp-leekwars-server/
-│   ├── server.js                         # MCP server for LeekWars REST API
-│   ├── package.json
-│   └── README.md
-├── .claude/skills/
-│   └── leekscript.md                     # Disk-based auto-trigger skill
-├── templates/
-│   └── CLAUDE.md.leekscript             # CLAUDE.md template for LeekScript projects
-└── README.md
-```
-
----
-
-## Reference Submodules
-
-Two official LeekWars repositories are included as git submodules under `vendor/`, providing ground-truth references for the LeekScript language and game engine.
-
-```bash
-# Clone with submodules
-git clone --recurse-submodules <repo-url>
-
-# Or initialize after cloning
-git submodule update --init --recursive
-```
-
-### `vendor/leekscript` — LeekScript Compiler
-
-Source: [github.com/leek-wars/leekscript](https://github.com/leek-wars/leekscript)
-
-The production LeekScript compiler (Java). Contains:
-
-| Path | What it provides |
-|------|------------------|
-| `src/main/java/leekscript/compiler/` | Lexer, parser, token types — the **definitive syntax reference** |
-| `src/main/java/leekscript/compiler/expression/` | All expression types (binary, unary, array access, etc.) |
-| `src/main/java/leekscript/compiler/instruction/` | All instruction types (if, for, while, return, etc.) |
-| `src/main/java/leekscript/compiler/bloc/` | Block types (function, class, main) |
-| `src/main/java/leekscript/runner/values/` | Runtime value types (Array, Map, String, Number, etc.) |
-| `src/main/java/leekscript/runner/classes/` | Built-in class definitions |
-| `src/test/resources/ai/` | Example `.leek` test scripts |
-
-### `vendor/leek-wars-generator` — Fight Engine & Game Data
-
-Source: [github.com/leek-wars/leek-wars-generator](https://github.com/leek-wars/leek-wars-generator)
-
-The LeekWars fight simulator. Contains:
-
-| Path | What it provides |
-|------|------------------|
-| `data/functions.json` | **All LeekScript API functions** with operations costs |
-| `data/weapons.json` | All weapon stats (damage, range, TP cost, area) |
-| `data/chips.json` | All chip stats (effects, range, cooldown, TP cost) |
-| `data/summons.json` | Summon entity definitions |
-| `data/components.json` | Component definitions |
-| `src/.../FightFunctions.java` | **Complete function implementation** — the authoritative API reference |
-| `src/.../FightConstants.java` | All game constants (effect types, areas, cell types) |
-| `src/.../weapons/` | Weapon class hierarchy |
-| `src/.../chips/` | Chip class hierarchy |
-| `src/.../entity/` | Entity model (leek stats, equipment, effects) |
-| `src/.../fight/` | Fight logic (turn order, damage calculation, LoS) |
-| `src/.../maps/` | Map generation and cell topology |
-
-These submodules serve as the **source of truth** when Claude needs to verify function signatures, game constants, damage formulas, or any behavior not covered by the bundled skill reference docs.
-
----
-
-## What Was Changed from Base Claude Code
-
-### System Prompt (src/constants/prompts.ts)
-
-| Section | Change |
-|---------|--------|
-| **Identity** | "LeekWars Code" — LeekScript specialist, not general SE assistant |
-| **Intro** | Includes LeekScript language overview (syntax, operators, types, constraints) |
-| **Doing tasks** | LeekScript-specific: TP/MP budgets, null-checking, `global` state, operations limits, AI structure, team composition |
-| **Actions** | Scoped to LeekWars risks: overwriting live AI, starting ranked fights, deleting scripts |
-| **Tone/style** | Exact API function names, `leekscript` code fences, game mechanic precision |
-| **Output** | Code-first responses, strategy-focused |
-| **Environment** | LeekWars documentation URLs, file extension recognition |
-
-### Skills (src/skills/bundled/index.ts)
-
-**Added:** `leekscript`, `leek-test`, `leek-sync`, `leek-optimize`
-
-**Removed:** batch, simplify, skillify, keybindings, loremIpsum, claudeInChrome, claudeApi, dream, hunter, loop, scheduleRemoteAgents, runSkillGenerator
-
-**Kept:** debug, verify, stuck, remember, updateConfig (utility skills still useful)
-
-### New Files
-
-- **4 bundled skills** with full LeekScript API reference (200+ functions), 8 AI pattern templates, optimization framework
-- **MCP server** with 16 tools for LeekWars REST API
-- **Disk-based skill** (`.claude/skills/leekscript.md`) for automatic LeekScript detection
-- **CLAUDE.md template** for LeekScript projects
-
----
-
 ## LeekScript at a Glance
 
 ```leekscript
-// Variables
-var x = 10              // mutable
-let y = 20              // constant
+// Variables: only var and global work (let/const are reserved but broken)
+var x = 10              // mutable, turn-local
 global state = "ATTACK" // persists across turns
 
-// Functional operators
-var doubled = [1, 2, 3] ~~ x -> x * 2      // map: [2, 4, 6]
-var evens = [1, 2, 3, 4] \ x -> x % 2 == 0 // filter: [2, 4]
-var result = 3 ~ x -> x ** x                // pipe: 27
+// Lambdas
+var square = x -> x ** 2
 
-// Basic AI
+// Functional ops (no ~~ or \ operators — use functions)
+var doubled = arrayMap([1, 2, 3], x -> x * 2)         // [2, 4, 6]
+var evens = arrayFilter([1, 2, 3, 4], x -> x % 2 == 0) // [2, 4]
+
+// Basic AI — observe, decide, act
 var enemy = getNearestEnemy()
 if (enemy != null) {
     moveToward(enemy)
     while (getTP() >= getWeaponCost(getWeapon()) and canUseWeapon(getWeapon(), enemy)) {
         useWeapon(enemy)
     }
+    moveAwayFrom(enemy)
 }
 ```
 
@@ -272,32 +140,75 @@ File extensions: `.lk`, `.leek`, `.ls`, `.lks`, `.leekscript`
 
 ---
 
-## Tech Stack
+## Project Layout
 
-| Category | Technology |
-|----------|------------|
-| Runtime | [Bun](https://bun.sh) |
-| Language | TypeScript (strict) |
-| Terminal UI | [React](https://react.dev) + [Ink](https://github.com/vadimdemedes/ink) |
-| LLM API | [Anthropic SDK](https://docs.anthropic.com) |
-| Protocols | [MCP SDK](https://modelcontextprotocol.io), LSP |
-| Schema Validation | [Zod v4](https://zod.dev) |
-| Game Platform | [LeekWars](https://leekwars.com) |
+```
+claude-code/
+├── setup.sh                              # One-command setup
+├── mcp-leekwars-server/
+│   └── server.js                         # MCP server (17 LeekWars API tools)
+├── .claude/skills/
+│   └── leekscript.md                     # Auto-trigger skill (installed globally by setup.sh)
+├── templates/
+│   └── CLAUDE.md.leekscript              # Project template
+├── vendor/                               # Ground-truth references (git submodules)
+│   ├── leekscript/                       # LeekScript compiler source (Java)
+│   └── leek-wars-generator/              # Fight engine + game data (weapons, chips, constants)
+├── src/
+│   ├── constants/prompts.ts              # System prompts (LeekWars-focused)
+│   ├── skills/bundled/
+│   │   ├── leekscript.ts                 # /leekscript skill
+│   │   ├── leekscript/
+│   │   │   ├── api-reference.md          # 197 functions, 400+ constants (from source)
+│   │   │   └── patterns.md              # 8 AI strategy patterns
+│   │   ├── leekTest.ts                   # /leek-test
+│   │   ├── leekSync.ts                   # /leek-sync
+│   │   └── leekOptimize.ts              # /leek-optimize
+│   └── utils/cliHighlight.ts             # LeekScript syntax highlighting
+└── README.md
+```
+
+---
+
+## Reference Submodules
+
+The API reference is generated from the actual game engine source, included as git submodules:
+
+| Submodule | Key files | What it provides |
+|-----------|-----------|------------------|
+| `vendor/leekscript` | `src/.../compiler/` | Definitive syntax reference (lexer, parser, token types) |
+| `vendor/leekscript` | `src/test/resources/ai/` | Example `.leek` test scripts |
+| `vendor/leek-wars-generator` | `src/.../FightFunctions.java` | All 197 API functions with exact signatures |
+| `vendor/leek-wars-generator` | `src/.../FightConstants.java` | All 400+ game constants |
+| `vendor/leek-wars-generator` | `data/weapons.json` | Weapon stats |
+| `vendor/leek-wars-generator` | `data/chips.json` | Chip stats |
+| `vendor/leek-wars-generator` | `data/functions.json` | Operations cost per function |
+
+Claude reads these files directly when it needs to verify a function signature or constant value.
+
+---
+
+## Reconfigure
+
+```bash
+# Change credentials
+./setup.sh NewUsername NewPassword
+
+# Or edit directly
+nano ~/.claude/leekwars-credentials.json
+
+# Manual MCP server test
+cd mcp-leekwars-server
+echo '{}' | LEEKWARS_LOGIN=You LEEKWARS_PASSWORD=Pass node server.js
+```
 
 ---
 
 ## Links
 
-- **LeekWars**: https://leekwars.com
-- **LeekScript Docs**: https://leekwars.com/help/documentation
-- **LeekScript Encyclopedia**: https://leekwars.com/encyclopedia/en/LeekScript
-- **LeekWars API**: https://leekwars.com/help/api
-- **LeekWars GitHub**: https://github.com/leek-wars
-- **LeekScript (Java)**: https://github.com/leek-wars/leekscript
-- **LeekScript-next (C++/LLVM)**: https://github.com/leek-wars/leekscript-next
-
----
-
-## Base Source
-
-This project is built on top of the Claude Code source (leaked 2026-03-31 via npm source map). The core infrastructure (QueryEngine, tools, MCP client, permissions, UI) is from the original codebase. All LeekWars-specific additions are in the files listed above.
+- [LeekWars](https://leekwars.com) — the game
+- [LeekScript Docs](https://leekwars.com/help/documentation) — official function reference
+- [LeekScript Encyclopedia](https://leekwars.com/encyclopedia/en/LeekScript) — language overview
+- [LeekWars API](https://leekwars.com/help/api) — REST API docs
+- [leek-wars/leekscript](https://github.com/leek-wars/leekscript) — compiler source
+- [leek-wars/leek-wars-generator](https://github.com/leek-wars/leek-wars-generator) — fight engine
