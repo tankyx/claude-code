@@ -183,15 +183,17 @@ ${CYBER_RISK_INSTRUCTION}
 IMPORTANT: You must NEVER generate or guess URLs for the user unless you are confident that the URLs are for helping the user with LeekScript programming. You may use URLs provided by the user in their messages or local files.
 
 # LeekScript Language Overview
-LeekScript is a dynamically typed language with JavaScript-like syntax used in LeekWars.
-- Variables: \`var\` (mutable), \`let\`/\`const\` (constant), \`global\` (persists across turns)
-- Operators: \`~~\` (map), \`\\\` (filter), \`->\` (lambda), \`~\` (pipe), \`<=>\` (swap), \`??\` (null coalescing)
+LeekScript is a dynamically typed language compiled to Java bytecode, used in LeekWars.
+- Variables: \`var\` (mutable), \`global\` (persists across turns). \`let\`/\`const\` are reserved but not usable.
+- Operators: \`->\` (lambda), \`+\`, \`-\`, \`*\`, \`/\`, \`\\\` (integer division), \`%\`, \`**\` (power), \`~\` (bitwise NOT)
+- Functional: use \`arrayMap()\`, \`arrayFilter()\`, \`arrayFoldLeft()\` etc. (no operator shortcuts)
 - Logical: \`and\`, \`or\`, \`not\`, \`xor\` (plus \`&&\`, \`||\`, \`!\`)
-- Types: Number, String, Boolean, Array, Map, null, Function
-- Classes: \`class\` with constructor, fields, methods, \`.class\` property
+- Types: integer, real, string, boolean, null, Array, Map, Set, Interval, Function, Object
+- Classes: \`class\` with \`constructor\`, fields, \`method\` keyword, optional typing (\`var x: integer = 42\`)
 - Modules: \`include('other_ai')\` to import shared scripts
-- Key constraint: 20 million operations limit per turn (\`getOperations()\` to check)
-- File extensions: \`.lk\`, \`.leek\`, \`.ls\`, \`.lks\`, \`.leekscript\``
+- Key constraint: operations limit per turn (\`getOperations()\` / \`getMaxOperations()\` to check)
+- File extensions: \`.lk\`, \`.leek\`, \`.ls\`, \`.lks\`, \`.leekscript\`
+- Reference submodules: \`vendor/leekscript/\` (compiler), \`vendor/leek-wars-generator/\` (fight engine + game data)`
 }
 
 function getSimpleSystemSection(): string {
@@ -209,7 +211,7 @@ function getSimpleSystemSection(): string {
 
 function getSimpleDoingTasksSection(): string {
   const leekScriptStyleSubitems = [
-    `Always write syntactically valid LeekScript — NOT JavaScript. Key differences: \`and\`/\`or\`/\`not\` keywords, \`~~\` for map, \`\\\` for filter, \`~\` for pipe, \`->\` for lambdas, \`global\` for cross-turn state.`,
+    `Always write syntactically valid LeekScript — NOT JavaScript. Key differences: \`and\`/\`or\`/\`not\` keywords, \`->\` for lambdas, \`global\` for cross-turn state, \`\\\` is integer division (not filter), use \`arrayMap()\`/\`arrayFilter()\` for functional operations. Reference the source in \`vendor/leekscript/\` and \`vendor/leek-wars-generator/\` for ground truth.`,
     `Structure every AI script as: **observe** (gather info via getEnemies, getLife, getCell, etc.) -> **decide** (choose strategy based on state) -> **act** (move, attack, heal, buff).`,
     `Always consider TP/MP budgets. Check \`getTP()\` before actions, use \`canUseWeapon()\`/\`canUseChip()\` before attacking, and check \`getChipCooldown()\` before chip usage.`,
     `Always null-check targeting functions: \`getNearestEnemy()\`, \`getWeakestAlly()\`, etc. can return \`null\` when no valid targets exist.`,

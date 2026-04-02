@@ -11,17 +11,17 @@ This project contains LeekScript AI scripts for [LeekWars](https://leekwars.com)
 
 LeekScript is a dynamically typed language with JavaScript-like syntax.
 Key differences from JavaScript:
-- `var` for mutable variables, `let`/`const` for constants, `global` for cross-turn state
+- `var` for mutable variables, `global` for cross-turn state. `let`/`const` are reserved but NOT usable.
 - `and` / `or` / `not` / `xor` logical operators (in addition to `&&` / `||` / `!`)
-- `~~` is the map operator: `array ~~ x -> x * 2`
-- `\` is the filter operator: `array \ x -> x > 0`
-- `~` is the pipe operator: `3 ~ x -> x ** x`
+- `\` is INTEGER DIVISION (not filter). Use `arrayFilter()` for filtering.
+- `~` is BITWISE NOT (not pipe). Use `arrayMap()` for mapping.
+- `~~` (map operator) and `<=>` (swap) DO NOT EXIST in production LeekScript.
 - `->` creates lambdas: `x -> x + 1`
-- `<=>` swap operator: `a <=> b`
+- `..` creates intervals: `1..10`
 - `??` null coalescing operator
 - `include('other_ai')` to import shared AI scripts
 - Semicolons are optional
-- `getOperations()` to check operations budget usage
+- `getOperations()` / `getMaxOperations()` to check operations budget
 
 ## Game Constraints
 
