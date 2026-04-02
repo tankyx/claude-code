@@ -39,6 +39,17 @@ function hljs(): HLJSApi {
   // highlight.js uses `export =` (CJS). Under bun/ESM the interop wraps it
   // in .default; under node CJS the module IS the API. Check at runtime.
   cachedHljs = 'default' in mod && mod.default ? mod.default : mod
+
+  // Register LeekScript extensions as aliases for JavaScript highlighting
+  const jsLang = cachedHljs!.getLanguage('javascript')
+  if (jsLang) {
+    for (const alias of ['leekscript', 'lk', 'leek', 'lks']) {
+      if (!cachedHljs!.getLanguage(alias)) {
+        cachedHljs!.registerLanguage(alias, () => jsLang)
+      }
+    }
+  }
+
   return cachedHljs!
 }
 

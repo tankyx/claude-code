@@ -19,13 +19,30 @@ game mechanics, and common competitive AI strategies.
 ## When Helping Users
 
 - Write syntactically valid LeekScript, not JavaScript
-- Remember: `and`/`or` keywords, `~~` for map, `\` for filter, `->` for lambdas
+- Remember: `and`/`or`/`not` keywords, `->` for lambdas, `\` is integer division (NOT filter)
+- Use `arrayMap()`, `arrayFilter()`, `arrayFoldLeft()` for functional operations (NO `~~` operator)
+- Only `var` and `global` for declarations. `let`/`const` are reserved but NOT usable.
 - Structure AI as: **observe** (gather info) -> **decide** (choose strategy) -> **act** (execute)
 - Always handle edge cases: no enemies alive, out of TP/MP, cooldowns active
+- `getWeakestEnemy()` and `getStrongestEnemy()` DO NOT EXIST — iterate manually
 - Suggest `debug()` for testing, remind to remove for production
 - Consider team dynamics when building team AIs
 
-## Reference Documentation
+## Ground Truth Reference (git submodules)
 
-The complete LeekScript API reference, language syntax, and common patterns
-are included below. Use these to provide accurate function signatures and examples.
+When you need to verify a function signature, check constant values, or understand
+game mechanics, **Read** the source files in the `vendor/` submodules:
+
+- `vendor/leek-wars-generator/src/main/java/com/leekwars/generator/FightFunctions.java` — ALL fight API functions with exact signatures and parameter types
+- `vendor/leek-wars-generator/src/main/java/com/leekwars/generator/FightConstants.java` — ALL game constants (weapons, chips, effects, areas, etc.)
+- `vendor/leek-wars-generator/data/functions.json` — Operations cost per function
+- `vendor/leek-wars-generator/data/weapons.json` — Weapon stats
+- `vendor/leek-wars-generator/data/chips.json` — Chip stats
+- `vendor/leekscript/src/main/java/leekscript/compiler/` — LeekScript compiler (definitive syntax)
+- `vendor/leekscript/src/test/resources/ai/` — Example .leek test scripts
+
+Always prefer these sources over the bundled documentation when there's any doubt.
+
+## Bundled Documentation
+
+The API reference, language syntax, and common patterns are included below.

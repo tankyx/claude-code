@@ -26,6 +26,19 @@ async function loadCliHighlight(): Promise<CliHighlight | null> {
     // cache hit — cli-highlight already loaded highlight.js
     const highlightJs = await import('highlight.js')
     loadedGetLanguage = highlightJs.getLanguage
+
+    // Register LeekScript as a highlight.js alias for JavaScript.
+    // LeekScript (.lk, .leek, .ls, .lks, .leekscript) has JS-like syntax
+    // and benefits from JavaScript highlighting for keywords, strings, etc.
+    const jsLang = highlightJs.getLanguage('javascript')
+    if (jsLang) {
+      for (const alias of ['leekscript', 'lk', 'leek', 'lks', 'ls']) {
+        if (!highlightJs.getLanguage(alias)) {
+          highlightJs.registerLanguage(alias, () => jsLang)
+        }
+      }
+    }
+
     return {
       highlight: cliHighlight.highlight,
       supportsLanguage: cliHighlight.supportsLanguage,

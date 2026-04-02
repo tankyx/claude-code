@@ -15,12 +15,16 @@ If no local files exist, ask the user which AI they want to test.
 ### Step 2: Static Analysis
 
 Before running a fight, analyze the code for common issues:
-1. **Null safety**: Check that \`getNearestEnemy()\`, \`getWeakestAlly()\`, etc. results are null-checked
+1. **Null safety**: Check that \`getNearestEnemy()\` etc. results are null-checked. Note: \`getWeakestEnemy()\`/\`getWeakestAlly()\` DO NOT EXIST — if code uses them, that's a bug
 2. **TP management**: Verify TP is checked before actions (\`getTP() >= cost\`)
 3. **Operations budget**: Look for potential infinite loops or O(n^3) patterns that might hit 20M limit
 4. **Global state**: Check that \`global\` is used for cross-turn state, not \`var\`
 5. **Dead code**: Functions defined but never called
 6. **Missing cooldown checks**: \`useChip()\` calls without \`getChipCooldown()\` checks
+7. **Invalid syntax**: \`~~\` (map), \`<=>\` (swap), \`let\`/\`const\` declarations — these don't work in production LeekScript
+8. **Non-existent functions**: \`forward()\`, \`backward()\`, \`random()\`, \`getWeakestEnemy()\`, \`getStrongestEnemy()\`, \`getWeakestAlly()\` — these don't exist
+
+When verifying function existence, Read \`vendor/leek-wars-generator/src/main/java/com/leekwars/generator/FightFunctions.java\` as the source of truth.
 
 ### Step 3: Run a Fight (if MCP tools available)
 

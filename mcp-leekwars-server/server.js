@@ -37,20 +37,26 @@ let authToken = process.env.LEEKWARS_TOKEN || null
 
 async function apiRequest(method, path, body = null) {
   const url = `${API_BASE}${path}`
-  const headers = { 'Content-Type': 'application/x-www-form-urlencoded' }
-
-  if (authToken) {
-    headers['Authorization'] = `Bearer ${authToken}`
-  }
-
+  const headers = {}
   const options = { method, headers }
 
-  if (body && method === 'POST') {
+  if (method === 'POST') {
+    headers['Content-Type'] = 'application/x-www-form-urlencoded'
     const params = new URLSearchParams()
-    for (const [key, value] of Object.entries(body)) {
-      params.append(key, String(value))
+    // Inject auth token into POST body (LeekWars v2.31+ convention)
+    if (authToken) {
+      params.append('token', authToken)
+    }
+    if (body) {
+      for (const [key, value] of Object.entries(body)) {
+        params.append(key, String(value))
+      }
     }
     options.body = params.toString()
+  } else {
+    // GET requests: append token as query param if needed
+    const separator = path.includes('?') ? '&' : '/'
+    // Some GET endpoints accept token as last path segment
   }
 
   const response = await fetch(url, options)
@@ -270,7 +276,7 @@ async function handleToolCall(name, args) {
     }
 
     case 'leekwars_list_ais': {
-      const result = await apiRequest('GET', '/ai/get-farmer-ais')
+      const result = await apiRequest('POST', '/ai/get-farmer-ais')
       const ais = result.ais || []
       if (ais.length === 0) return 'No AIs found.'
       return ais
@@ -279,7 +285,7 @@ async function handleToolCall(name, args) {
     }
 
     case 'leekwars_get_ai': {
-      const result = await apiRequest('GET', `/ai/get/${args.ai_id}`)
+      const result = await apiRequest('POST', '/ai/get', { ai_id: args.ai_id })
       const ai = result.ai || result
       return `# AI: ${ai.name} (ID: ${ai.id})\nValid: ${ai.valid}\nVersion: ${ai.version || 'unknown'}\n\n## Code:\n\`\`\`leekscript\n${ai.code || '(empty)'}\n\`\`\``
     }
@@ -322,7 +328,7 @@ async function handleToolCall(name, args) {
     }
 
     case 'leekwars_get_leek': {
-      const result = await apiRequest('GET', `/leek/get/${args.leek_id}`)
+      const result = await apiRequest('POST', '/leek/get', { leek_id: args.leek_id })
       const leek = result.leek || result
       return [
         `# ${leek.name} (ID: ${leek.id})`,
@@ -353,7 +359,7 @@ async function handleToolCall(name, args) {
     }
 
     case 'leekwars_start_fight': {
-      const result = await apiRequest('POST', '/fight/start-solo-fight', {
+      const result = await apiRequest('POST', '/garden/start-solo-fight', {
         leek_id: args.leek_id,
         target_id: args.target_id,
       })
@@ -361,14 +367,14 @@ async function handleToolCall(name, args) {
     }
 
     case 'leekwars_start_farmer_fight': {
-      const result = await apiRequest('POST', '/fight/start-farmer-fight', {
+      const result = await apiRequest('POST', '/garden/start-farmer-fight', {
         target_id: args.target_id,
       })
       return `Farmer fight started! ID: ${result.fight || result.id || JSON.stringify(result)}`
     }
 
     case 'leekwars_get_fight': {
-      const result = await apiRequest('GET', `/fight/get/${args.fight_id}`)
+      const result = await apiRequest('POST', '/fight/get', { fight_id: args.fight_id })
       const fight = result.fight || result
       return [
         `# Fight ${fight.id}`,
@@ -389,7 +395,7 @@ async function handleToolCall(name, args) {
     }
 
     case 'leekwars_get_garden': {
-      const result = await apiRequest('GET', '/garden/get')
+      const result = await apiRequest('POST', '/garden/get')
       const opponents = result.enemies || result.solos || []
       if (opponents.length === 0) return 'No opponents available.'
       return opponents
@@ -402,10 +408,8 @@ async function handleToolCall(name, args) {
     }
 
     case 'leekwars_get_farmer': {
-      const path = args.farmer_id
-        ? `/farmer/get/${args.farmer_id}`
-        : '/farmer/get'
-      const result = await apiRequest('GET', path)
+      const body = args.farmer_id ? { farmer_id: args.farmer_id } : {}
+      const result = await apiRequest('POST', '/farmer/get', body)
       const farmer = result.farmer || result
       return [
         `# ${farmer.name} (ID: ${farmer.id})`,
@@ -416,16 +420,17 @@ async function handleToolCall(name, args) {
     }
 
     case 'leekwars_get_constants': {
-      const result = await apiRequest('GET', '/constant/get-all')
+      const result = await apiRequest('POST', '/constant/get-all')
       return JSON.stringify(result, null, 2).slice(0, 5000) + '\n...(truncated)'
     }
 
     case 'leekwars_get_ranking': {
       const page = args.page || 1
-      const result = await apiRequest(
-        'GET',
-        `/ranking/get/${args.type}/${args.order}/${page}`,
-      )
+      const result = await apiRequest('POST', '/ranking/get', {
+        type: args.type,
+        order: args.order,
+        page,
+      })
       const rankings = result.rankings || []
       return rankings
         .slice(0, 20)
