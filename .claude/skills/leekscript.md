@@ -284,12 +284,31 @@ include('shared_utilities')  // import another AI script by name
 | `getSummoner()` | Entity that summoned you |
 | `getSummoner(entity)` | Entity that summoned entity |
 
+### Network / Messaging (for team coordination)
+| Function | Description |
+|----------|-------------|
+| `sendTo(entity, type, params)` | Send message to an ally entity |
+| `sendAll(type, params)` | Send message to all allies |
+| `getMessages([type])` | Get received messages (optional type filter) |
+| `getMessageAuthor(message)` | Get message author entity ID |
+| `getMessageType(message)` | Get message type constant |
+| `getMessageParams(message)` | Get message parameters |
+
+### Registers (persistent data between fights)
+| Function | Description |
+|----------|-------------|
+| `getRegisters()` | Get all persistent registers as map |
+| `getRegister(key)` | Get a register value by key |
+| `setRegister(key, value)` | Set a register value (persists between fights!) |
+| `deleteRegister(key)` | Delete a register |
+
 ### Communication & Debug
 | Function | Description |
 |----------|-------------|
 | `say(message)` | Display message in chat bubble |
-| `mark(cell, color)` | Mark a cell with a color |
-| `markText(cell, text, color)` | Mark cell with text and color |
+| `mark(cell_or_cells, [color, duration])` | Mark cell(s) with a color |
+| `markText(cell_or_cells, [text, color, duration])` | Mark cell(s) with text |
+| `clearMarks()` | Clear all cell marks |
 | `debug(value)` | Log to debug console |
 | `debugW(value)` | Log warning to debug console |
 | `debugE(value)` | Log error to debug console |
