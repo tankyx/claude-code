@@ -27,7 +27,7 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 echo -e "${BOLD}============================================${NC}"
-echo -e "${BOLD}  LeekWars Code — Setup${NC}"
+echo -e "${BOLD}  lwcode — LeekWars Code Setup${NC}"
 echo -e "${BOLD}============================================${NC}"
 echo ""
 
@@ -45,9 +45,9 @@ echo -e "${GREEN}  ✓${NC} Node.js $(node -v)"
 if ! command -v claude &>/dev/null; then
     echo -e "${YELLOW}  ⚠ Claude Code CLI not found in PATH.${NC}"
     echo -e "    Install it with: npm install -g @anthropic-ai/claude-code"
-    echo -e "    Continuing anyway (MCP server will still work)..."
+    echo -e "    lwcode uses Claude Code as its base — you need it installed."
 else
-    echo -e "${GREEN}  ✓${NC} Claude Code CLI found"
+    echo -e "${GREEN}  ✓${NC} Claude Code CLI found (base for lwcode)"
 fi
 
 if ! command -v curl &>/dev/null; then
@@ -248,7 +248,7 @@ echo "    ✓ LeekScript skill (auto-triggers on .lk files)"
 echo "    ✓ LeekWars credentials (if provided)"
 echo ""
 echo "  Usage:"
-echo "    claude                        # Start Claude Code"
+echo "    claude                        # Start lwcode (via Claude Code)"
 echo "    > Write me a kiter AI         # Ask for LeekScript code"
 echo "    > /leekscript                 # Open full API reference"
 echo "    > Show my leeks               # Uses MCP server"

@@ -1,4 +1,4 @@
-# LeekWars Code
+# lwcode — LeekWars Code
 
 > Claude Code + LeekWars. Write, debug, optimize, and deploy LeekScript AI — all from the terminal.
 
@@ -39,10 +39,12 @@ The script will ask for your LeekWars username and password, test them against t
 
 ```bash
 cd ~/my-leek-scripts
-claude
+claude    # lwcode runs through your existing Claude Code installation
 ```
 
 That's it. Claude now knows LeekScript, has access to your LeekWars account, and can read/write `.lk` files.
+
+> **Note:** `lwcode` works as an overlay on your existing Claude Code installation. The `setup.sh` script configures Claude Code with the LeekWars MCP server and LeekScript skill — so you run `claude` as usual, and it automatically has LeekWars capabilities. Your standard Claude Code usage is unaffected in other directories.
 
 ---
 
