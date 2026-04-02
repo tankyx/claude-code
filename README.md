@@ -20,10 +20,29 @@ This is **not** a general-purpose coding assistant. Every prompt, skill, and int
 
 ---
 
+## Setup (one command)
+
+```bash
+git clone --recurse-submodules https://github.com/tankyx/claude-code.git
+cd claude-code
+./setup.sh
+```
+
+The setup script will:
+1. Install MCP server dependencies
+2. Ask for your LeekWars credentials and test them
+3. Register the MCP server in your Claude Code config (`~/.claude/settings.json`)
+4. Install the LeekScript skill globally (`~/.claude/skills/leekscript.md`)
+5. Optionally create a `CLAUDE.md` in your project directory
+
+You can also pass credentials directly: `./setup.sh MyUsername MyPassword`
+
+Credentials are saved to `~/.claude/leekwars-credentials.json` (mode 600) and the MCP server auto-logs in on startup.
+
 ## Quick Start
 
 ```bash
-# Run LeekWars Code in your AI scripts directory
+# Run Claude Code in your AI scripts directory
 claude
 
 # Use built-in skills
