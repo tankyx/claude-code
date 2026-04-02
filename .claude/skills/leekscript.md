@@ -29,37 +29,40 @@ the LeekWars game engine with a **20 million operations limit** per turn.
 ### Variable Declarations
 ```leekscript
 var x = 10           // mutable variable
-let y = 20           // constant (cannot be reassigned)
-const z = 30         // constant, accessible everywhere
 var name = "Leek"    // string
 var arr = [1, 2, 3]  // array
 var map = ["a": 1, "b": 2]  // map (associative array)
 global myGlobal = 0  // persists across turns
+// Note: let/const are reserved keywords but NOT implemented. Only use var and global.
 ```
 
 ### Data Types
-- **Number**: integers and floats (`42`, `3.14`)
-- **String**: text (`"hello"`, `'world'`)
-- **Boolean**: `true`, `false`
+- **integer** / **real**: numbers (`42`, `3.14`)
+- **string**: text (`"hello"`, `'world'`)
+- **boolean**: `true`, `false`
 - **Array**: ordered list (`[1, 2, 3]`)
 - **Map**: key-value pairs (`["key": value]`)
+- **Set**: unique values (`<1, 2, 3>`)
+- **Interval**: range (`1..10`)
 - **null**: absence of value
 - **Function**: first-class functions
+- **Object**: anonymous objects
+- **Class**: class values
 
 ### Operators
 ```leekscript
-// Arithmetic: + - * / % ** ++ --
+// Arithmetic: + - * / \ (integer division) % ** (power) ++ --
 // Comparison: == != < > <= >= === !==
 // Logical: and or not xor ! && ||
-// Bitwise: & | ^ ~ << >>
+// Bitwise: & | ^ ~ (bitwise NOT) << >> >>>
 // String: + (concatenation)
-// Functional: ~~ (map), \ (filter), -> (lambda), ~ (pipe)
-// Type: is, instanceof
-// Swap: <=> (swap two variables)
-// Null coalescing: ??
+// Lambda: -> (e.g., x -> x * 2)
+// Null coalescing: ?? ??=
+// Range: .. (e.g., 1..10 creates Interval)
+// Membership: in, not in
+// Type: instanceof, is (alias for ==), as (cast)
 // Ternary: condition ? a : b
-// Absolute/length: |expr| (e.g., |-5| or |array|)
-// Membership: x in array
+// NOTE: ~~ (map) and <=> (swap) DO NOT EXIST. Use arrayMap()/arrayFilter().
 ```
 
 ### Control Flow
@@ -99,9 +102,9 @@ function myFunction(a, b) {
 var add = function(a, b) { return a + b }
 var square = x -> x ** 2
 
-// Functional operators
-var doubled = [1, 2, 3] ~~ x -> x * 2       // map: [2, 4, 6]
-var evens = [1, 2, 3, 4] \ x -> x % 2 == 0  // filter: [2, 4]
+// Functional operations (use functions, not operators)
+var doubled = arrayMap([1, 2, 3], x -> x * 2)       // [2, 4, 6]
+var evens = arrayFilter([1, 2, 3, 4], x -> x % 2 == 0)  // [2, 4]
 ```
 
 ### Classes
@@ -128,17 +131,17 @@ include('shared_utilities')  // import another AI script by name
 
 ### Important Notes
 - Semicolons are optional (newlines act as statement terminators)
-- `var` for mutable, `let`/`const` for constants, `global` for cross-turn persistence
-- The `~~` operator maps a function over an array
-- The `\` operator filters an array
-- The `~` operator pipes a value into a function: `3 ~ x -> x ** x`
-- `->` creates lambda functions
-- `<=>` swaps two variables: `a <=> b`
+- Only `var` and `global` for declarations. `let`/`const` are reserved but NOT implemented.
+- `->` creates lambda functions: `x -> x * 2`
+- `\` is integer division (NOT filter). Use `arrayFilter()` for filtering.
+- `~` is bitwise NOT (NOT pipe). Use `arrayMap()` for mapping.
+- `~~` (map operator) and `<=>` (swap) DO NOT EXIST in production LeekScript.
 - `??` null coalescing: `value ?? default`
-- `getOperations()` returns current operations count (budget is ~20M per turn)
+- `..` range operator: `1..10` creates an Interval
+- `getOperations()` returns current operations count
 - `include('name')` imports shared AI scripts
 - Parentheses in `if`/`while`/`for` are optional
-- Array comprehension: `[for var i = 0; i < 5; ++i { i }]`
+- Refer to `vendor/leekscript/` and `vendor/leek-wars-generator/` for ground truth
 
 ## LeekWars API - Complete Function Reference
 
@@ -153,8 +156,12 @@ include('shared_utilities')  // import another AI script by name
 | `moveTowardCell(cell, maxMP)` | Move toward cell using at most maxMP |
 | `moveAwayFromCell(cell)` | Move away from a specific cell |
 | `moveAwayFromCell(cell, maxMP)` | Move away from cell using at most maxMP |
-| `forward(steps)` | Move forward by steps cells |
-| `backward(steps)` | Move backward by steps cells |
+| `moveTowardEntities(entities)` | Move toward multiple entities |
+| `moveTowardCells(cells)` | Move toward multiple cells |
+| `moveAwayFromEntities(entities)` | Move away from multiple entities |
+| `moveAwayFromCells(cells)` | Move away from multiple cells |
+| `moveTowardLine(c1, c2, [maxMP])` | Move toward a line |
+| `moveAwayFromLine(c1, c2, [maxMP])` | Move away from a line |
 
 ### Combat Functions
 | Function | Description |
@@ -209,9 +216,10 @@ include('shared_utilities')  // import another AI script by name
 | `getNearestAlly()` | ID of nearest ally |
 | `getFarthestEnemy()` | ID of farthest enemy |
 | `getFarthestAlly()` | ID of farthest ally |
-| `getWeakestEnemy()` | ID of enemy with lowest HP |
-| `getStrongestEnemy()` | ID of enemy with highest HP |
-| `getWeakestAlly()` | ID of ally with lowest HP |
+| `getNearestEnemyTo(entity)` | Nearest enemy to another entity |
+| `getNearestEnemyToCell(cell)` | Nearest enemy to a cell |
+| `getNearestAllyTo(entity)` | Nearest ally to another entity |
+| `getNearestAllyToCell(cell)` | Nearest ally to a cell |
 | `getLeekOnCell(cell)` | Entity on a cell (or null) |
 | `getEntityOnCell(cell)` | Entity on a cell (or null) |
 | `isEnemy(entity)` | True if entity is an enemy |
@@ -299,7 +307,8 @@ include('shared_utilities')  // import another AI script by name
 | `getType(value)` | Type of value as number |
 | `typeOf(value)` | Type of value as string |
 | `count(array)` | Length of array |
-| `contains(array, val)` | True if array contains val |
+| `inArray(array, val)` | True if array contains val |
+| `contains(str, substr)` | True if string contains substring |
 | `pushAll(array, items)` | Add all items to array |
 | `sort(array)` | Sort array in place |
 | `sort(array, key)` | Sort array by key function |
@@ -316,7 +325,8 @@ include('shared_utilities')  // import another AI script by name
 | `sqrt(n)` | Square root |
 | `pow(base, exp)` | Power |
 | `cos(n)` / `sin(n)` / `tan(n)` | Trigonometry |
-| `random()` | Random float 0-1 |
+| `rand()` | Random float 0-1 |
+| `randFloat(min, max)` | Random float in range |
 | `randInt(min, max)` | Random integer in range |
 | `string(val)` | Convert to string |
 | `number(val)` | Convert to number |
@@ -329,33 +339,92 @@ include('shared_utilities')  // import another AI script by name
 | `toLower(str)` | To lowercase |
 | `toUpper(str)` | To uppercase |
 
-### Key Constants
+### Key Constants (from FightConstants.java — see vendor/leek-wars-generator/)
 ```leekscript
-// Colors
-COLOR_RED, COLOR_GREEN, COLOR_BLUE, COLOR_WHITE, COLOR_BLACK
+// Cells
+CELL_EMPTY, CELL_PLAYER, CELL_ENTITY, CELL_OBSTACLE
 
-// Effect types
+// Entity types
+ENTITY_LEEK, ENTITY_BULB, ENTITY_TURRET, ENTITY_CHEST, ENTITY_MOB
+
+// Bulb types
+BULB_PUNY, BULB_FIRE, BULB_HEALER, BULB_ROCKY, BULB_ICED,
+BULB_LIGHTNING, BULB_METALLIC, BULB_WIZARD, BULB_TACTICIAN, BULB_SAVANT
+
+// Effects (73+ total — most common listed)
 EFFECT_DAMAGE, EFFECT_HEAL, EFFECT_BUFF_STRENGTH, EFFECT_BUFF_AGILITY,
 EFFECT_BUFF_WISDOM, EFFECT_BUFF_RESISTANCE, EFFECT_BUFF_MP, EFFECT_BUFF_TP,
-EFFECT_POISON, EFFECT_SHACKLE_MP, EFFECT_SHACKLE_TP, EFFECT_SHACKLE_STRENGTH,
-EFFECT_ABSOLUTE_SHIELD, EFFECT_RELATIVE_SHIELD, EFFECT_TELEPORT,
-EFFECT_ANTIDOTE, EFFECT_SUMMON
+EFFECT_POISON, EFFECT_SUMMON, EFFECT_SHACKLE_MP, EFFECT_SHACKLE_TP,
+EFFECT_SHACKLE_STRENGTH, EFFECT_SHACKLE_MAGIC, EFFECT_SHACKLE_AGILITY,
+EFFECT_SHACKLE_WISDOM, EFFECT_ABSOLUTE_SHIELD, EFFECT_RELATIVE_SHIELD,
+EFFECT_TELEPORT, EFFECT_ANTIDOTE, EFFECT_KILL, EFFECT_RESURRECT,
+EFFECT_DAMAGE_RETURN, EFFECT_VULNERABILITY, EFFECT_DEBUFF, EFFECT_INVERT,
+EFFECT_AFTEREFFECT, EFFECT_LIFE_DAMAGE, EFFECT_NOVA_DAMAGE, EFFECT_PUSH,
+EFFECT_ATTRACT, EFFECT_REPEL, EFFECT_STEAL_LIFE, EFFECT_ADD_STATE ...
 
-// Cell content types
-CELL_EMPTY, CELL_OBSTACLE, CELL_PLAYER
+// States
+STATE_UNHEALABLE, STATE_INVINCIBLE
 
-// Weapon IDs: WEAPON_PISTOL, WEAPON_MACHINE_GUN, WEAPON_SHOTGUN,
-// WEAPON_MAGNUM, WEAPON_LASER, WEAPON_GRENADE_LAUNCHER,
-// WEAPON_FLAME_THROWER, WEAPON_DESTROYER, WEAPON_ELECTRISOR,
-// WEAPON_M_LASER, WEAPON_B_LASER, WEAPON_KATANA, WEAPON_BROADSWORD,
-// WEAPON_RIFLE, WEAPON_GAZOR, WEAPON_NEUTRINO, WEAPON_GRAVITON,
-// WEAPON_ENIGMA
+// Use results
+USE_CRITICAL, USE_SUCCESS, USE_FAILED, USE_INVALID_TARGET,
+USE_NOT_ENOUGH_TP, USE_INVALID_COOLDOWN, USE_INVALID_POSITION,
+USE_TOO_MANY_SUMMONS, USE_RESURRECT_INVALID_ENTITY, USE_MAX_USES
 
-// Chip IDs: CHIP_SPARK, CHIP_CURE, CHIP_SHIELD, CHIP_HELMET,
-// CHIP_FLASH, CHIP_PROTEIN, CHIP_MOTIVATION, CHIP_ADRENALINE,
-// CHIP_WALL, CHIP_RAMPART, CHIP_FORTRESS, CHIP_LEATHER_BOOTS,
-// CHIP_REGENERATION, CHIP_STALACTITE, CHIP_ICEBERG, CHIP_METEORITE,
-// CHIP_ROCK, CHIP_ROCKFALL, CHIP_EARTHQUAKE, ...
+// Weapons (38 total)
+WEAPON_PISTOL, WEAPON_MACHINE_GUN, WEAPON_DOUBLE_GUN, WEAPON_SHOTGUN,
+WEAPON_MAGNUM, WEAPON_LASER, WEAPON_GRENADE_LAUNCHER, WEAPON_FLAME_THROWER,
+WEAPON_DESTROYER, WEAPON_GAZOR, WEAPON_ELECTRISOR, WEAPON_M_LASER,
+WEAPON_B_LASER, WEAPON_KATANA, WEAPON_BROADSWORD, WEAPON_AXE,
+WEAPON_J_LASER, WEAPON_RIFLE, WEAPON_RHINO, WEAPON_EXPLORER_RIFLE,
+WEAPON_LIGHTNINGER, WEAPON_PROTON_CANON, WEAPON_NEUTRINO, WEAPON_TASER,
+WEAPON_BAZOOKA, WEAPON_DARK_KATANA, WEAPON_SWORD, WEAPON_HEAVY_SWORD,
+WEAPON_ODACHI, WEAPON_EXCALIBUR, WEAPON_SCYTHE, WEAPON_QUANTUM_RIFLE ...
+
+// Chips (110 total — see FightConstants.java for full list)
+CHIP_BANDAGE, CHIP_CURE, CHIP_DRIP, CHIP_REGENERATION, CHIP_VACCINE,
+CHIP_SHOCK, CHIP_FLASH, CHIP_LIGHTNING, CHIP_SPARK, CHIP_FLAME,
+CHIP_METEORITE, CHIP_ROCK, CHIP_ROCKFALL, CHIP_ICE, CHIP_STALACTITE,
+CHIP_ICEBERG, CHIP_SHIELD, CHIP_HELMET, CHIP_ARMOR, CHIP_WALL,
+CHIP_RAMPART, CHIP_FORTRESS, CHIP_PROTEIN, CHIP_STEROID, CHIP_DOPING,
+CHIP_LEATHER_BOOTS, CHIP_WINGED_BOOTS, CHIP_SEVEN_LEAGUE_BOOTS,
+CHIP_MOTIVATION, CHIP_ADRENALINE, CHIP_RAGE, CHIP_TELEPORTATION,
+CHIP_INVERSION, CHIP_RESURRECTION, CHIP_ANTIDOTE, CHIP_PUNY_BULB,
+CHIP_FIRE_BULB, CHIP_HEALER_BULB, CHIP_ROCKY_BULB ...
+
+// Areas
+AREA_POINT, AREA_LASER_LINE, AREA_CIRCLE_1, AREA_CIRCLE_2, AREA_CIRCLE_3,
+AREA_PLUS_1, AREA_PLUS_2, AREA_PLUS_3, AREA_X_1, AREA_X_2, AREA_X_3,
+AREA_SQUARE_1, AREA_SQUARE_2, AREA_FIRST_INLINE, AREA_ENEMIES, AREA_ALLIES
+
+// Launch types
+LAUNCH_TYPE_LINE, LAUNCH_TYPE_DIAGONAL, LAUNCH_TYPE_STAR,
+LAUNCH_TYPE_CIRCLE, LAUNCH_TYPE_STAR_INVERTED ...
+
+// Messages (for sendTo/sendAll)
+MESSAGE_HEAL, MESSAGE_ATTACK, MESSAGE_DEBUFF, MESSAGE_SHIELD,
+MESSAGE_BUFF_MP, MESSAGE_BUFF_TP, MESSAGE_BUFF_STRENGTH,
+MESSAGE_BUFF_AGILITY, MESSAGE_MOVE_TOWARD, MESSAGE_MOVE_AWAY,
+MESSAGE_MOVE_TOWARD_CELL, MESSAGE_MOVE_AWAY_CELL, MESSAGE_CUSTOM
+
+// Maps
+MAP_NEXUS, MAP_FACTORY, MAP_DESERT, MAP_FOREST, MAP_GLACIER,
+MAP_BEACH, MAP_TEMPLE, MAP_TEIEN, MAP_CASTLE, MAP_CEMETERY
+
+// Fight types
+FIGHT_TYPE_SOLO, FIGHT_TYPE_FARMER, FIGHT_TYPE_TEAM,
+FIGHT_TYPE_BATTLE_ROYALE, FIGHT_TYPE_BOSS
+
+// Fight contexts
+FIGHT_CONTEXT_TEST, FIGHT_CONTEXT_GARDEN, FIGHT_CONTEXT_CHALLENGE,
+FIGHT_CONTEXT_TOURNAMENT, FIGHT_CONTEXT_BATTLE_ROYALE
+
+// Stats (for getStat())
+STAT_LIFE, STAT_TP, STAT_MP, STAT_STRENGTH, STAT_AGILITY,
+STAT_FREQUENCY, STAT_WISDOM, STAT_RESISTANCE, STAT_SCIENCE,
+STAT_MAGIC, STAT_POWER, STAT_DAMAGE_RETURN, STAT_CORES, STAT_RAM
+
+// Misc
+MAX_TURNS, SUMMON_LIMIT, CRITICAL_FACTOR
 ```
 
 ## Common AI Patterns
@@ -392,11 +461,21 @@ if (enemy != null) {
 
 ### Healer Support
 ```leekscript
-// Heal weakest ally, attack if no healing needed
-var weakestAlly = getWeakestAlly()
+// Heal most hurt ally, attack if no healing needed
 var healChip = CHIP_CURE
 
-if (weakestAlly != null and getLife(weakestAlly) < getTotalLife(weakestAlly) * 0.7) {
+// Find most hurt ally (no built-in function for this)
+var weakestAlly = null
+var minRatio = 1.0
+for (var ally in getAliveAllies()) {
+    var ratio = getLife(ally) / getTotalLife(ally)
+    if (ratio < minRatio) {
+        minRatio = ratio
+        weakestAlly = ally
+    }
+}
+
+if (weakestAlly != null and minRatio < 0.7) {
     moveToward(weakestAlly)
     if (canUseChip(healChip, weakestAlly)) {
         useChip(healChip, weakestAlly)
@@ -526,12 +605,12 @@ The LeekWars platform provides a REST API at `https://leekwars.com/api/`:
 - `GET /api/ranking/get/{type}/{order}` - Get rankings
 
 ### File Extensions
-LeekScript files use `.lk` or `.leekscript` extensions.
+LeekScript files use `.lk`, `.leek`, `.ls`, `.lks`, or `.leekscript` extensions.
 
 ## When Writing LeekScript Code
 
-1. Always write syntactically valid LeekScript (not JavaScript - note differences like `and`/`or` keywords, `~~` map operator, `\` filter operator)
-2. Use `global` for persistent state, `var` for turn-local variables
+1. Always write syntactically valid LeekScript (not JavaScript - note: `and`/`or` keywords, `\` is integer division not filter, use `arrayMap()`/`arrayFilter()` for functional ops)
+2. Use `global` for persistent state, `var` for turn-local variables. Do NOT use `let`/`const`.
 3. Consider TP/MP budget constraints in every decision
 4. Structure code as: **observe -> decide -> act** each turn
 5. Handle edge cases: dead enemies, empty arrays, null returns from targeting functions
