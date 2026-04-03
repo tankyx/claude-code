@@ -4,7 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-VERSION="${1:-1.0.0}"
+VERSION="${1:-2.1.91}"
 OUTFILE="${2:-dist/lwcode}"
 
 echo "Building lwcode v${VERSION}..."
