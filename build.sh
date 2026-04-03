@@ -109,25 +109,30 @@ if isinstance(exports, dict) and './compiler-runtime' not in exports:
 
 echo "  Stubs ready."
 
-# Step 2: Bundle for Node.js (primary — works everywhere)
+# Step 2: Bundle for Node.js CJS (primary — matches stock claude format)
 mkdir -p dist
-echo "Bundling for Node.js target..."
-bun build src/entrypoints/cli.tsx --outfile dist/lwcode.mjs \
+echo "Bundling for Node.js (CJS)..."
+bun build src/entrypoints/cli.tsx --outfile dist/lwcode.js \
   --target node \
+  --format cjs \
   --define "MACRO.VERSION=\"${VERSION}\"" \
   --define 'MACRO.PACKAGE_URL="lwcode"' \
   --define 'MACRO.ISSUES_EXPLAINER="report at https://github.com/tankyx/claude-code/issues"' \
   --define 'process.env.USER_TYPE="external"'
 
-sed -i 's/then(() => )/then(() => null)/g' dist/lwcode.mjs
+sed -i 's/then(() => )/then(() => null)/g' dist/lwcode.js
 
-# Add shebang and create executable wrapper
+# Add shebang to the JS file and make it directly executable
+sed -i '1i#!/usr/bin/env node' dist/lwcode.js
+chmod +x dist/lwcode.js
+
+# Create wrapper that sets config dir
 cat > dist/lwcode << 'WRAPEOF'
 #!/usr/bin/env bash
-# lwcode — LeekWars Code (Node.js)
+# lwcode — LeekWars Code
 export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.lwcode}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-exec node "$SCRIPT_DIR/lwcode.mjs" "$@"
+exec node "$SCRIPT_DIR/lwcode.js" "$@"
 WRAPEOF
 chmod +x dist/lwcode
 
@@ -149,11 +154,11 @@ rm -f dist/lwcode-bun.mjs
 echo ""
 echo "Build complete!"
 echo ""
-ls -lh dist/lwcode dist/lwcode.mjs dist/lwcode-bin 2>/dev/null
+ls -lh dist/lwcode dist/lwcode.js dist/lwcode-bin 2>/dev/null
 echo ""
 echo "Test:"
-node dist/lwcode.mjs --version
+dist/lwcode --version
 echo ""
 echo "Install:"
-echo "  sudo cp dist/lwcode dist/lwcode.mjs dist/package.json /usr/local/bin/"
+echo "  sudo cp dist/lwcode dist/lwcode.js /usr/local/bin/"
 echo "  lwcode --version"
