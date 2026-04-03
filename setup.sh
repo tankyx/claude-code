@@ -219,9 +219,9 @@ fi
 
 echo -e "  Installing lwcode command..."
 # Check if built binary exists, otherwise fall back to claude wrapper
-if [ -f "$SCRIPT_DIR/dist/lwcode.mjs" ] && [ -f "$SCRIPT_DIR/dist/lwcode" ]; then
-    # Install the custom-built lwcode (Node.js bundle with custom UI/prompts/skills)
-    $NEEDS_SUDO cp "$SCRIPT_DIR/dist/lwcode" "$SCRIPT_DIR/dist/lwcode.mjs" "$SCRIPT_DIR/dist/package.json" "$(dirname "$LWCODE_BIN")/"
+if [ -f "$SCRIPT_DIR/dist/lwcode.js" ] && [ -f "$SCRIPT_DIR/dist/lwcode" ]; then
+    # Install the custom-built lwcode (Node.js CJS bundle with custom UI/prompts/skills)
+    $NEEDS_SUDO cp "$SCRIPT_DIR/dist/lwcode" "$SCRIPT_DIR/dist/lwcode.js" "$(dirname "$LWCODE_BIN")/"
     $NEEDS_SUDO chmod +x "$LWCODE_BIN"
     echo -e "${GREEN}  ✓${NC} lwcode (custom build) installed to $LWCODE_BIN"
 else
