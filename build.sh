@@ -132,7 +132,7 @@ cat > dist/lwcode << 'WRAPEOF'
 # lwcode — LeekWars Code
 export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.lwcode}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-exec node "$SCRIPT_DIR/lwcode.js" "$@"
+exec node --max-old-space-size=4096 "$SCRIPT_DIR/lwcode.js" "$@"
 WRAPEOF
 chmod +x dist/lwcode
 
