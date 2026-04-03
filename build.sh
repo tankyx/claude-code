@@ -9,11 +9,9 @@ OUTFILE="${2:-dist/lwcode}"
 
 echo "Building lwcode v${VERSION}..."
 
-# Step 0: Install dependencies if needed
-if [ ! -d "node_modules" ]; then
-    echo "Installing dependencies..."
-    bun install
-fi
+# Step 0: Install/update dependencies
+echo "Installing dependencies..."
+bun install
 
 # Step 1: Create stub modules for Anthropic-internal and optional packages
 # These packages are behind feature() flags or dynamic imports and will never
