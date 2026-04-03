@@ -57,15 +57,13 @@ sed -i 's/Welcome to Claude Code/Welcome to lwcode/g' dist/lwcode.js
 # 2i: Change hex color in heatmap
 sed -i 's/#da7756/#4CAF50/g' dist/lwcode.js
 
-# Step 3: Create wrapper script
-cat > dist/lwcode << 'WRAPEOF'
-#!/usr/bin/env bash
-# lwcode — LeekWars Code (patched claude binary)
-export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.lwcode}"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-exec node "$SCRIPT_DIR/lwcode.js" "$@"
-WRAPEOF
-chmod +x dist/lwcode
+# Step 3: Make it directly executable (no wrapper needed)
+# The patched JS already has #!/usr/bin/env node shebang and
+# the CLAUDE_CONFIG_DIR injection at line 2
+chmod +x dist/lwcode.js
+
+# Create a convenience symlink name
+ln -sf lwcode.js dist/lwcode
 
 echo ""
 echo "Patch complete!"
@@ -75,5 +73,5 @@ echo "Test:"
 dist/lwcode --version
 echo ""
 echo "Install:"
-echo "  sudo cp dist/lwcode dist/lwcode.js /usr/local/bin/"
+echo "  sudo cp dist/lwcode.js /usr/local/bin/lwcode"
 echo "  lwcode --version"
