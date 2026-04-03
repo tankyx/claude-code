@@ -15,7 +15,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MCP_DIR="$SCRIPT_DIR/mcp-leekwars-server"
 CLAUDE_HOME="${CLAUDE_CONFIG_DIR:-$HOME/.lwcode}"
-SKILLS_DIR="$CLAUDE_HOME/skills"
+SKILLS_DIR="$HOME/.claude/skills"
 SETTINGS_FILE="$CLAUDE_HOME/settings.json"
 
 # Colors
@@ -152,9 +152,12 @@ echo -e "${BLUE}[4/5]${NC} Configuring Claude Code..."
 mkdir -p "$CLAUDE_HOME"
 mkdir -p "$SKILLS_DIR"
 
-# Copy the LeekScript skill globally
-cp "$SCRIPT_DIR/.claude/skills/leekscript.md" "$SKILLS_DIR/leekscript.md"
-echo -e "${GREEN}  ✓${NC} LeekScript skill installed to $SKILLS_DIR/leekscript.md"
+# Copy all LeekWars skills
+for skill in "$SCRIPT_DIR"/.claude/skills/*.md; do
+    cp "$skill" "$SKILLS_DIR/"
+done
+SKILL_COUNT=$(ls "$SCRIPT_DIR"/.claude/skills/*.md | wc -l)
+echo -e "${GREEN}  ✓${NC} $SKILL_COUNT skills installed to $SKILLS_DIR/ (leekscript, leek-test, leek-optimize, leek-sync)"
 
 # Build the MCP server config with credentials
 # Use a Python script to safely merge into existing settings.json
