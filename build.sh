@@ -123,13 +123,12 @@ sed -i 's/then(() => )/then(() => null)/g' dist/lwcode.mjs
 
 # Add shebang and create executable wrapper
 cat > dist/lwcode << 'WRAPEOF'
-#!/usr/bin/env node
-// lwcode — LeekWars Code
-import('./lwcode.mjs');
+#!/usr/bin/env bash
+# lwcode — LeekWars Code (Node.js)
+export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.lwcode}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+exec node "$SCRIPT_DIR/lwcode.mjs" "$@"
 WRAPEOF
-
-# Make it work as ESM
-echo '{"type":"module"}' > dist/package.json
 chmod +x dist/lwcode
 
 # Step 3: Also compile Bun binary (optional, for environments with Bun)
