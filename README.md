@@ -8,42 +8,9 @@
 
 There are two ways to use lwcode: as an **overlay** on your existing Claude Code, or as a **standalone binary**.
 
-### Option A: Standalone binary (recommended)
+### Install
 
-Build lwcode as its own binary that runs alongside your regular `claude` install.
-
-**Prerequisites:** [Bun](https://bun.sh/) 1.1+, [curl](https://curl.se/), a [LeekWars](https://leekwars.com) account
-
-```bash
-git clone --recurse-submodules https://github.com/tankyx/claude-code.git
-cd claude-code
-./build.sh
-```
-
-This compiles 3954 modules into a single ~116 MB binary at `dist/lwcode`.
-
-```bash
-# Install globally (optional)
-sudo cp dist/lwcode /usr/local/bin/
-
-# Run
-lwcode --version          # 1.0.0 (LeekWars Code)
-lwcode --help             # Full CLI help
-cd ~/my-leek-scripts
-lwcode                    # Start interactive session
-```
-
-Then run `setup.sh` to configure your LeekWars credentials and MCP server:
-
-```bash
-./setup.sh YourUsername YourPassword
-```
-
-### Option B: Overlay on Claude Code
-
-Use your existing Claude Code installation with `CLAUDE_CONFIG_DIR` pointed at lwcode's config.
-
-**Prerequisites:** [Node.js](https://nodejs.org/) 18+, [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI (`npm install -g @anthropic-ai/claude-code`), a [LeekWars](https://leekwars.com) account
+**Prerequisites:** [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI (`npm install -g @anthropic-ai/claude-code`), a [LeekWars](https://leekwars.com) account
 
 ```bash
 git clone --recurse-submodules https://github.com/tankyx/claude-code.git
@@ -51,14 +18,15 @@ cd claude-code
 ./setup.sh YourUsername YourPassword
 ```
 
-Then run claude with the lwcode config:
+The setup script installs the `lwcode` command, which runs Claude Code with a separate config directory (`~/.lwcode/`). Your regular `claude` at `~/.claude/` is untouched.
 
 ```bash
 cd ~/my-leek-scripts
-CLAUDE_CONFIG_DIR=~/.lwcode claude
+lwcode                    # Start interactive session
+lwcode -p "Write a kiter AI"  # Non-interactive mode
 ```
 
-> **Note:** lwcode uses `~/.lwcode/` for all its config (settings, skills, credentials). Your regular `claude` uses `~/.claude/` — they never overlap.
+> **Note:** `lwcode` is a thin wrapper around `claude` that sets `CLAUDE_CONFIG_DIR=~/.lwcode`. All LeekWars-specific config (MCP server, skills, credentials) lives there, completely isolated from your regular Claude Code.
 
 ### What `setup.sh` does
 
