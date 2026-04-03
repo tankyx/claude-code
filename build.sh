@@ -137,15 +137,26 @@ bun build src/entrypoints/cli.tsx --outfile dist/lwcode.mjs \
 
 sed -i 's/then(() => )/then(() => null)/g' dist/lwcode.mjs
 
-# Step 5: Create Node.js wrapper
+# Step 5: Create Node.js wrapper (fallback)
 cat > dist/lwcode-node << 'NODEEOF'
 #!/usr/bin/env bash
-# lwcode via Node.js — use this if the compiled binary hangs on API calls.
+# lwcode via Node.js — fallback if the compiled binary has issues.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.lwcode}"
 exec node "$SCRIPT_DIR/lwcode.mjs" "$@"
 NODEEOF
 chmod +x dist/lwcode-node
+
+# Step 6: Create claude wrapper (recommended — most compatible)
+# Runs the standard claude CLI with lwcode's separate config dir.
+cat > dist/lwcode-wrapper << 'WRAPEOF'
+#!/usr/bin/env bash
+# lwcode — runs claude CLI with lwcode's config (~/.lwcode/).
+# Requires: npm install -g @anthropic-ai/claude-code
+export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.lwcode}"
+exec claude "$@"
+WRAPEOF
+chmod +x dist/lwcode-wrapper
 
 echo ""
 echo "Build complete: $OUTFILE"

@@ -205,6 +205,24 @@ print(f"  MCP server registered in {settings_file}")
 PYEOF
 echo -e "${GREEN}  ✓${NC} LeekWars MCP server configured"
 
+# Install lwcode command
+LWCODE_BIN="/usr/local/bin/lwcode"
+NEEDS_SUDO=""
+if [ -w "$(dirname "$LWCODE_BIN")" ]; then
+    NEEDS_SUDO=""
+else
+    NEEDS_SUDO="sudo"
+fi
+
+echo -e "  Installing lwcode command..."
+$NEEDS_SUDO bash -c "cat > $LWCODE_BIN" << 'LWEOF'
+#!/usr/bin/env bash
+export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.lwcode}"
+exec claude "$@"
+LWEOF
+$NEEDS_SUDO chmod +x "$LWCODE_BIN"
+echo -e "${GREEN}  ✓${NC} lwcode command installed to $LWCODE_BIN"
+
 # -----------------------------------------------------------
 # Step 5: Initialize current project (optional)
 # -----------------------------------------------------------
