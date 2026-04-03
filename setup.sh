@@ -218,13 +218,23 @@ else
 fi
 
 echo -e "  Installing lwcode command..."
-$NEEDS_SUDO bash -c "cat > $LWCODE_BIN" << 'LWEOF'
+# Check if built binary exists, otherwise fall back to claude wrapper
+if [ -f "$SCRIPT_DIR/dist/lwcode.mjs" ] && [ -f "$SCRIPT_DIR/dist/lwcode" ]; then
+    # Install the custom-built lwcode (Node.js bundle with custom UI/prompts/skills)
+    $NEEDS_SUDO cp "$SCRIPT_DIR/dist/lwcode" "$SCRIPT_DIR/dist/lwcode.mjs" "$SCRIPT_DIR/dist/package.json" "$(dirname "$LWCODE_BIN")/"
+    $NEEDS_SUDO chmod +x "$LWCODE_BIN"
+    echo -e "${GREEN}  ✓${NC} lwcode (custom build) installed to $LWCODE_BIN"
+else
+    # Fall back to wrapper around stock claude
+    $NEEDS_SUDO bash -c "cat > $LWCODE_BIN" << 'LWEOF'
 #!/usr/bin/env bash
 export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.lwcode}"
 exec claude "$@"
 LWEOF
-$NEEDS_SUDO chmod +x "$LWCODE_BIN"
-echo -e "${GREEN}  ✓${NC} lwcode command installed to $LWCODE_BIN"
+    $NEEDS_SUDO chmod +x "$LWCODE_BIN"
+    echo -e "${GREEN}  ✓${NC} lwcode (claude wrapper) installed to $LWCODE_BIN"
+    echo -e "${YELLOW}    Run ./build.sh first for the full custom lwcode experience${NC}"
+fi
 
 # -----------------------------------------------------------
 # Step 5: Initialize current project (optional)
