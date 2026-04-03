@@ -112,7 +112,7 @@ echo "  Stubs ready."
 # Step 2: Bundle to JS
 mkdir -p dist
 echo "Bundling (3900+ modules)..."
-bun build src/entrypoints/cli.tsx --outfile dist/lwcode.js \
+bun build src/entrypoints/cli.tsx --outfile dist/lwcode.mjs \
   --target bun \
   --define "MACRO.VERSION=\"${VERSION}\"" \
   --define 'MACRO.PACKAGE_URL="lwcode"' \
@@ -120,11 +120,11 @@ bun build src/entrypoints/cli.tsx --outfile dist/lwcode.js \
   --define 'process.env.USER_TYPE="external"'
 
 # Step 3: Fix Bun 1.x bundler bug (empty dynamic import expression)
-sed -i 's/then(() => )/then(() => null)/g' dist/lwcode.js
+sed -i 's/then(() => )/then(() => null)/g' dist/lwcode.mjs
 
 # Step 4: Compile to standalone binary
 echo "Compiling binary..."
-bun build dist/lwcode.js --compile --outfile "$OUTFILE" --target bun
+bun build dist/lwcode.mjs --compile --outfile "$OUTFILE" --target bun
 
 # Step 5: Create Node.js wrapper (fallback for environments where Bun's fetch fails)
 cat > dist/lwcode-node << 'NODEEOF'
@@ -133,12 +133,12 @@ cat > dist/lwcode-node << 'NODEEOF'
 # Bun's compiled fetch() fails in some VPS environments; Node.js works.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.lwcode}"
-exec node "$SCRIPT_DIR/lwcode.js" "$@"
+exec node "$SCRIPT_DIR/lwcode.mjs" "$@"
 NODEEOF
 chmod +x dist/lwcode-node
 
 # Keep lwcode.js for Node.js wrapper
-echo "(kept dist/lwcode.js for Node.js fallback)"
+echo "(kept dist/lwcode.mjs for Node.js fallback)"
 
 echo ""
 echo "Build complete: $OUTFILE"
