@@ -109,24 +109,8 @@ if isinstance(exports, dict) and './compiler-runtime' not in exports:
 
 echo "  Stubs ready."
 
-# Step 2: Bundle for Bun (compiled binary)
+# Step 2: Bundle for Node.js (primary — works everywhere)
 mkdir -p dist
-echo "Bundling for Bun target..."
-bun build src/entrypoints/cli.tsx --outfile dist/lwcode-bun.mjs \
-  --target bun \
-  --define "MACRO.VERSION=\"${VERSION}\"" \
-  --define 'MACRO.PACKAGE_URL="lwcode"' \
-  --define 'MACRO.ISSUES_EXPLAINER="report at https://github.com/tankyx/claude-code/issues"' \
-  --define 'process.env.USER_TYPE="external"'
-
-sed -i 's/then(() => )/then(() => null)/g' dist/lwcode-bun.mjs
-
-# Step 3: Compile to standalone binary
-echo "Compiling binary..."
-bun build dist/lwcode-bun.mjs --compile --outfile "$OUTFILE" --target bun
-rm -f dist/lwcode-bun.mjs
-
-# Step 4: Bundle for Node.js (fallback for VPS where Bun's fetch hangs)
 echo "Bundling for Node.js target..."
 bun build src/entrypoints/cli.tsx --outfile dist/lwcode.mjs \
   --target node \
@@ -137,30 +121,40 @@ bun build src/entrypoints/cli.tsx --outfile dist/lwcode.mjs \
 
 sed -i 's/then(() => )/then(() => null)/g' dist/lwcode.mjs
 
-# Step 5: Create Node.js wrapper (fallback)
-cat > dist/lwcode-node << 'NODEEOF'
-#!/usr/bin/env bash
-# lwcode via Node.js — fallback if the compiled binary has issues.
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.lwcode}"
-exec node "$SCRIPT_DIR/lwcode.mjs" "$@"
-NODEEOF
-chmod +x dist/lwcode-node
-
-# Step 6: Create claude wrapper (recommended — most compatible)
-# Runs the standard claude CLI with lwcode's separate config dir.
-cat > dist/lwcode-wrapper << 'WRAPEOF'
-#!/usr/bin/env bash
-# lwcode — runs claude CLI with lwcode's config (~/.lwcode/).
-# Requires: npm install -g @anthropic-ai/claude-code
-export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.lwcode}"
-exec claude "$@"
+# Add shebang and create executable wrapper
+cat > dist/lwcode << 'WRAPEOF'
+#!/usr/bin/env node
+// lwcode — LeekWars Code
+import('./lwcode.mjs');
 WRAPEOF
-chmod +x dist/lwcode-wrapper
+
+# Make it work as ESM
+echo '{"type":"module"}' > dist/package.json
+chmod +x dist/lwcode
+
+# Step 3: Also compile Bun binary (optional, for environments with Bun)
+echo "Bundling for Bun target..."
+bun build src/entrypoints/cli.tsx --outfile dist/lwcode-bun.mjs \
+  --target bun \
+  --define "MACRO.VERSION=\"${VERSION}\"" \
+  --define 'MACRO.PACKAGE_URL="lwcode"' \
+  --define 'MACRO.ISSUES_EXPLAINER="report at https://github.com/tankyx/claude-code/issues"' \
+  --define 'process.env.USER_TYPE="external"'
+
+sed -i 's/then(() => )/then(() => null)/g' dist/lwcode-bun.mjs
+
+echo "Compiling Bun binary..."
+bun build dist/lwcode-bun.mjs --compile --outfile dist/lwcode-bin --target bun
+rm -f dist/lwcode-bun.mjs
 
 echo ""
-echo "Build complete: $OUTFILE"
-ls -lh "$OUTFILE"
+echo "Build complete!"
 echo ""
-echo "Test: $OUTFILE --version"
-"$OUTFILE" --version
+ls -lh dist/lwcode dist/lwcode.mjs dist/lwcode-bin 2>/dev/null
+echo ""
+echo "Test:"
+node dist/lwcode.mjs --version
+echo ""
+echo "Install:"
+echo "  sudo cp dist/lwcode dist/lwcode.mjs dist/package.json /usr/local/bin/"
+echo "  lwcode --version"
