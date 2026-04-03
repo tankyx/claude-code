@@ -131,6 +131,125 @@ function resolveComponentName(template) {
   return c ? `${c.name} (${c.stats})` : `Unknown(${template})`
 }
 
+// ── SQLite helpers for fight history database ──
+
+const FIGHT_DB_DIR = '/home/ubuntu/LeekWars-AI/tools'
+
+function sqliteQuery(dbPath, sql) {
+  try {
+    const escaped = sql.replace(/'/g, "'\\''")
+    const result = execSync(`sqlite3 -json '${dbPath}' '${escaped}'`, {
+      timeout: 5000, encoding: 'utf-8',
+    })
+    return result.trim() ? JSON.parse(result) : []
+  } catch {
+    return []
+  }
+}
+
+function sqliteRun(dbPath, sql) {
+  try {
+    const escaped = sql.replace(/'/g, "'\\''")
+    execSync(`sqlite3 '${dbPath}' '${escaped}'`, { timeout: 5000 })
+  } catch { /* ignore write errors */ }
+}
+
+function getOpponentStats(dbPath, opponentId) {
+  const rows = sqliteQuery(dbPath,
+    `SELECT * FROM opponent_stats WHERE opponent_id = ${opponentId}`)
+  if (rows.length === 0) return null
+  const r = rows[0]
+  const total = r.total_fights || 0
+  const winRate = r.win_rate || 0
+  let status = 'unknown'
+  if (total >= 2 && winRate >= 0.7) status = 'beatable'
+  else if (total >= 2 && winRate <= 0.3) status = 'dangerous'
+  else if (total >= 2) status = 'even'
+  return { ...r, status }
+}
+
+function categorizeOpponents(opponents, dbPath) {
+  const beatable = [], dangerous = [], even = [], unknown = []
+  for (const opp of opponents) {
+    const stats = getOpponentStats(dbPath, opp.id)
+    if (!stats || stats.total_fights < 2) unknown.push(opp)
+    else if (stats.status === 'beatable') beatable.push(opp)
+    else if (stats.status === 'dangerous') dangerous.push(opp)
+    else even.push(opp)
+  }
+  return { beatable, dangerous, even, unknown }
+}
+
+function selectOpponent(categorized, strategy) {
+  let pool
+  const { beatable, dangerous, even, unknown } = categorized
+  switch (strategy) {
+    case 'safe':
+      pool = [...beatable, ...unknown]
+      break
+    case 'aggressive':
+      pool = [...beatable, ...unknown, ...even, ...dangerous]
+      break
+    case 'adaptive':
+    case 'smart':
+    default:
+      pool = [...beatable, ...unknown, ...even.slice(0, Math.ceil(even.length / 2))]
+      break
+  }
+  if (pool.length === 0) pool = [...beatable, ...unknown, ...even, ...dangerous]
+  if (pool.length === 0) return null
+  // Weighted random: prefer earlier entries (better matchups)
+  const weights = pool.map((_, i) => Math.max(1, pool.length - i))
+  const totalWeight = weights.reduce((a, b) => a + b, 0)
+  let rand = Math.random() * totalWeight
+  for (let i = 0; i < pool.length; i++) {
+    rand -= weights[i]
+    if (rand <= 0) return pool[i]
+  }
+  return pool[pool.length - 1]
+}
+
+function recordFight(dbPath, fightId, opponentId, opponentName, opponentLevel, result, fightUrl) {
+  const now = new Date().toISOString()
+  const safeName = opponentName.replace(/'/g, "''")
+  // Insert fight record
+  sqliteRun(dbPath,
+    `INSERT OR REPLACE INTO fight_history (fight_id, opponent_id, opponent_name, opponent_level, result, fight_url, timestamp) VALUES (${fightId}, ${opponentId}, '${safeName}', ${opponentLevel}, '${result}', '${fightUrl}', '${now}')`)
+  // Recalculate opponent stats
+  sqliteRun(dbPath,
+    `INSERT OR REPLACE INTO opponent_stats (opponent_id, opponent_name, opponent_level, wins, losses, draws, total_fights, win_rate, last_fought, last_updated)
+     SELECT ${opponentId}, '${safeName}', ${opponentLevel},
+       SUM(CASE WHEN result='WIN' THEN 1 ELSE 0 END),
+       SUM(CASE WHEN result='LOSS' THEN 1 ELSE 0 END),
+       SUM(CASE WHEN result='DRAW' THEN 1 ELSE 0 END),
+       COUNT(*),
+       CAST(SUM(CASE WHEN result='WIN' THEN 1 ELSE 0 END) AS REAL) / COUNT(*),
+       '${now}', '${now}'
+     FROM fight_history WHERE opponent_id = ${opponentId}`)
+}
+
+function waitForFight(fightId) {
+  for (let i = 0; i < 15; i++) {
+    execSync('sleep 2')
+    try {
+      const data = apiRequest('GET', `/fight/get/${fightId}`)
+      const fight = data.fight || data
+      if (fight.status === 2) return fight
+    } catch { /* retry */ }
+  }
+  return null
+}
+
+function determineFightResult(fight, leekId) {
+  const team1 = fight.leeks1 || []
+  const team2 = fight.leeks2 || []
+  const inTeam1 = team1.some(l => l.id === leekId)
+  if (fight.winner === 0) return 'DRAW'
+  if (inTeam1 && fight.winner === 1) return 'WIN'
+  if (!inTeam1 && fight.winner === 2) return 'WIN'
+  return 'LOSS'
+}
+
 // Cookie jar file — the LeekWars API uses session cookies for auth.
 // curl's --cookie-jar / --cookie flags maintain session automatically,
 // matching the working Python `requests.Session()` approach.
@@ -362,6 +481,24 @@ const TOOLS = [
     description:
       'Get all game constants (weapon stats, chip stats, effect types, etc.).',
     inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'leekwars_solo_fight',
+    description:
+      'Run N solo garden fights for a leek with smart opponent selection based on fight history database. Picks opponents you can beat and avoids dangerous ones.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        leek_id: { type: 'number', description: 'Your leek ID' },
+        num_fights: { type: 'number', description: 'Number of fights to run (default 5)' },
+        strategy: {
+          type: 'string',
+          description: 'Opponent selection strategy',
+          enum: ['safe', 'smart', 'aggressive', 'adaptive'],
+        },
+      },
+      required: ['leek_id'],
+    },
   },
   {
     name: 'leekwars_test_fight',
@@ -618,6 +755,154 @@ async function handleToolCall(name, args) {
     case 'leekwars_get_constants': {
       const result = await apiRequest('GET', '/constant/get-all')
       return JSON.stringify(result, null, 2).slice(0, 5000) + '\n...(truncated)'
+    }
+
+    case 'leekwars_solo_fight': {
+      const leekId = args.leek_id
+      const numFights = args.num_fights || 5
+      const strategy = args.strategy || 'smart'
+      const dbPath = `${FIGHT_DB_DIR}/fight_history_${leekId}.db`
+
+      // Get leek name for display
+      let leekName = `Leek ${leekId}`
+      try {
+        const leekData = apiRequest('GET', `/leek/get/${leekId}`)
+        const leek = leekData.leek || leekData
+        leekName = leek.name || leekName
+      } catch { /* use fallback name */ }
+
+      // Get DB stats before
+      const statsBefore = sqliteQuery(dbPath,
+        `SELECT SUM(CASE WHEN result='WIN' THEN 1 ELSE 0 END) as wins, SUM(CASE WHEN result='LOSS' THEN 1 ELSE 0 END) as losses, SUM(CASE WHEN result='DRAW' THEN 1 ELSE 0 END) as draws, COUNT(*) as total FROM fight_history`)
+      const before = statsBefore[0] || { wins: 0, losses: 0, draws: 0, total: 0 }
+
+      const results = []
+      let wins = 0, losses = 0, draws = 0, errors = 0
+      let consecutiveFailures = 0
+
+      for (let i = 0; i < numFights && consecutiveFailures < 5; i++) {
+        // 1. Get opponents
+        let opponents
+        try {
+          const oppData = apiRequest('GET', `/garden/get-leek-opponents/${leekId}`)
+          opponents = oppData.opponents || []
+        } catch {
+          consecutiveFailures++
+          continue
+        }
+
+        if (opponents.length === 0) {
+          consecutiveFailures++
+          execSync('sleep 3')
+          continue
+        }
+
+        // 2. Smart selection
+        const categorized = categorizeOpponents(opponents, dbPath)
+        const target = selectOpponent(categorized, strategy)
+        if (!target) {
+          consecutiveFailures++
+          continue
+        }
+
+        // 3. Start fight
+        let fightId
+        for (let retry = 0; retry < 3; retry++) {
+          try {
+            const fightResult = apiRequest('POST', '/garden/start-solo-fight', {
+              leek_id: leekId,
+              target_id: target.id,
+            })
+            if (fightResult.fight) {
+              fightId = fightResult.fight
+              break
+            }
+            if (fightResult.error === 'too_many_fights' || fightResult.error === 'no_more_fights') {
+              return [
+                `# Solo Fights: ${leekName}`,
+                `Stopped after ${i} fights: no more fights available`,
+                `Session: ${wins}W / ${losses}L / ${draws}D`,
+              ].join('\n')
+            }
+            if (fightResult.error === 'rate_limit') {
+              execSync(`sleep ${(fightResult.retry_after || 2) + 1}`)
+              continue
+            }
+          } catch { /* retry */ }
+          execSync('sleep 2')
+        }
+
+        if (!fightId) {
+          errors++
+          consecutiveFailures++
+          continue
+        }
+
+        // 4. Wait for result
+        const fight = waitForFight(fightId)
+        if (!fight) {
+          errors++
+          consecutiveFailures++
+          continue
+        }
+
+        // 5. Determine result
+        const result = determineFightResult(fight, leekId)
+        const fightUrl = `https://leekwars.com/fight/${fightId}`
+
+        if (result === 'WIN') wins++
+        else if (result === 'LOSS') losses++
+        else draws++
+
+        // 6. Record to DB
+        recordFight(dbPath, fightId, target.id, target.name, target.level || 0, result, fightUrl)
+
+        // 7. Track for summary
+        const oppStats = getOpponentStats(dbPath, target.id)
+        const histStr = oppStats ? `[${oppStats.wins}W-${oppStats.losses}L, ${(oppStats.win_rate * 100).toFixed(0)}%]` : ''
+        results.push(`${result === 'WIN' ? 'W' : result === 'LOSS' ? 'L' : 'D'} vs ${target.name} (Lvl ${target.level || '?'}) ${histStr}`)
+
+        consecutiveFailures = 0
+      }
+
+      // Build summary
+      const total = wins + losses + draws
+      const winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : '0.0'
+
+      // Get updated global stats
+      const statsAfter = sqliteQuery(dbPath,
+        `SELECT SUM(CASE WHEN result='WIN' THEN 1 ELSE 0 END) as wins, COUNT(*) as total FROM fight_history`)
+      const after = statsAfter[0] || { wins: 0, total: 0 }
+      const globalWinRate = after.total > 0 ? ((after.wins / after.total) * 100).toFixed(1) : '0.0'
+
+      const beatableCount = sqliteQuery(dbPath,
+        `SELECT COUNT(*) as c FROM opponent_stats WHERE win_rate >= 0.7 AND total_fights >= 2`)
+      const dangerousCount = sqliteQuery(dbPath,
+        `SELECT COUNT(*) as c FROM opponent_stats WHERE win_rate <= 0.3 AND total_fights >= 2`)
+      const trackedCount = sqliteQuery(dbPath,
+        `SELECT COUNT(*) as c FROM opponent_stats`)
+
+      const lines = [
+        `# Solo Fights: ${leekName}`,
+        `Strategy: ${strategy}`,
+        ``,
+        `## Session Results`,
+        `Fights: ${total}/${numFights}`,
+        `Record: ${wins}W / ${losses}L / ${draws}D (${winRate}% win rate)`,
+        errors > 0 ? `Errors: ${errors}` : '',
+        ``,
+        `## Fight Log`,
+        ...results,
+        ``,
+        `## Database Stats`,
+        `Total fights tracked: ${after.total}`,
+        `Global win rate: ${globalWinRate}%`,
+        `Opponents tracked: ${trackedCount[0]?.c || 0}`,
+        `Beatable opponents: ${beatableCount[0]?.c || 0}`,
+        `Dangerous opponents: ${dangerousCount[0]?.c || 0}`,
+      ]
+
+      return lines.filter(l => l !== '').join('\n')
     }
 
     case 'leekwars_test_fight': {
