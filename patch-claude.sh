@@ -18,6 +18,7 @@ echo "Patching claude binary into lwcode..."
 echo "  Source: $CLAUDE_BIN ($(wc -c < "$CLAUDE_BIN" | tr -d ' ') bytes)"
 
 mkdir -p dist
+rm -f dist/package.json  # Remove any leftover ESM/CJS config
 
 # Step 1: Copy the stock binary
 cp "$CLAUDE_BIN" dist/lwcode.js
@@ -25,10 +26,10 @@ cp "$CLAUDE_BIN" dist/lwcode.js
 # Step 2: Apply patches using sed
 
 # 2a: Inject CLAUDE_CONFIG_DIR at the very start (after shebang)
-# This makes lwcode use ~/.lwcode/ instead of ~/.claude/ for its config
+# Uses import() since the stock binary is ESM
 sed -i '2i\
 // lwcode patch: use separate config directory\
-if (!process.env.CLAUDE_CONFIG_DIR) process.env.CLAUDE_CONFIG_DIR = require("path").join(require("os").homedir(), ".lwcode");' dist/lwcode.js
+import{homedir as __lwH}from"os";import{join as __lwJ}from"path";if(!process.env.CLAUDE_CONFIG_DIR)process.env.CLAUDE_CONFIG_DIR=__lwJ(__lwH(),".lwcode");' dist/lwcode.js
 
 # 2b: Change program name from "claude" to "lwcode" (Commander.js)
 sed -i 's/\.name("claude")/\.name("lwcode")/g' dist/lwcode.js
