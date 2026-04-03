@@ -74,5 +74,7 @@ echo "Test:"
 dist/lwcode --version
 echo ""
 echo "Install:"
-echo "  sudo cp dist/lwcode.js /usr/local/bin/lwcode"
+echo "  sudo rm -f /usr/local/bin/lwcode /usr/local/bin/lwcode-node /usr/local/bin/lwcode.mjs /usr/local/bin/lwcode.js"
+echo "  sudo cp dist/lwcode.js /usr/local/bin/lwcode && sudo chmod +x /usr/local/bin/lwcode"
+echo '  echo '"'"'{"type":"module"}'"'"' | sudo tee /usr/local/bin/package.json > /dev/null'
 echo "  lwcode --version"
