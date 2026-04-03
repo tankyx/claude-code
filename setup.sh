@@ -221,9 +221,12 @@ echo -e "  Installing lwcode command..."
 # Check if built binary exists, otherwise fall back to claude wrapper
 if [ -f "$SCRIPT_DIR/dist/lwcode.js" ]; then
     # Install the patched lwcode (stock claude binary with LeekWars customizations)
+    $NEEDS_SUDO rm -f "$LWCODE_BIN"
     $NEEDS_SUDO cp "$SCRIPT_DIR/dist/lwcode.js" "$LWCODE_BIN"
     $NEEDS_SUDO chmod +x "$LWCODE_BIN"
-    echo -e "${GREEN}  ✓${NC} lwcode (custom build) installed to $LWCODE_BIN"
+    # Node.js needs package.json with "type":"module" for ESM
+    echo '{"type":"module"}' | $NEEDS_SUDO tee "$(dirname "$LWCODE_BIN")/package.json" > /dev/null
+    echo -e "${GREEN}  ✓${NC} lwcode (patched claude) installed to $LWCODE_BIN"
 else
     # Fall back to wrapper around stock claude
     $NEEDS_SUDO bash -c "cat > $LWCODE_BIN" << 'LWEOF'
