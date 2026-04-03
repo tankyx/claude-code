@@ -126,8 +126,19 @@ sed -i 's/then(() => )/then(() => null)/g' dist/lwcode.js
 echo "Compiling binary..."
 bun build dist/lwcode.js --compile --outfile "$OUTFILE" --target bun
 
-# Cleanup intermediate JS
-rm -f dist/lwcode.js
+# Step 5: Create Node.js wrapper (fallback for environments where Bun's fetch fails)
+cat > dist/lwcode-node << 'NODEEOF'
+#!/usr/bin/env bash
+# lwcode via Node.js — use this if the compiled binary hangs on API calls.
+# Bun's compiled fetch() fails in some VPS environments; Node.js works.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.lwcode}"
+exec node "$SCRIPT_DIR/lwcode.js" "$@"
+NODEEOF
+chmod +x dist/lwcode-node
+
+# Keep lwcode.js for Node.js wrapper
+echo "(kept dist/lwcode.js for Node.js fallback)"
 
 echo ""
 echo "Build complete: $OUTFILE"
