@@ -6,36 +6,41 @@
 
 ## Quick Start
 
-There are two ways to use lwcode: as an **overlay** on your existing Claude Code, or as a **standalone binary**.
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) 18+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI (`npm install -g @anthropic-ai/claude-code`)
+- A [LeekWars](https://leekwars.com) account
 
 ### Install
-
-**Prerequisites:** [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI (`npm install -g @anthropic-ai/claude-code`), a [LeekWars](https://leekwars.com) account
 
 ```bash
 git clone --recurse-submodules https://github.com/tankyx/claude-code.git
 cd claude-code
-./setup.sh YourUsername YourPassword
+./patch-claude.sh
+./setup.sh
 ```
 
-The setup script installs the `lwcode` command, which runs Claude Code with a separate config directory (`~/.lwcode/`). Your regular `claude` at `~/.claude/` is untouched.
+`patch-claude.sh` copies your installed `claude` binary and patches it with:
+- Separate config directory (`~/.lwcode/`) so it doesn't touch your regular `claude`
+- Green color theme (instead of orange)
+- "lwcode" / "LeekWars Code" branding
+
+`setup.sh` then configures:
+1. LeekWars credentials (tested against the live API)
+2. MCP server with 17 LeekWars API tools (auto-login on startup)
+3. LeekScript skills installed to `~/.claude/skills/`
+4. `CLAUDE.md` template in your project directory
+
+### Use
 
 ```bash
 cd ~/my-leek-scripts
-lwcode                    # Start interactive session
-lwcode -p "Write a kiter AI"  # Non-interactive mode
+lwcode                                 # Interactive session
+lwcode -p "Write me a kiter AI"        # Non-interactive
 ```
 
-> **Note:** `lwcode` is a thin wrapper around `claude` that sets `CLAUDE_CONFIG_DIR=~/.lwcode`. All LeekWars-specific config (MCP server, skills, credentials) lives there, completely isolated from your regular Claude Code.
-
-### What `setup.sh` does
-
-1. Installs MCP server dependencies (`mcp-leekwars-server/`)
-2. Tests your LeekWars credentials against the live API
-3. Saves credentials to `~/.lwcode/leekwars-credentials.json` (mode 600, local only)
-4. Registers the MCP server in `~/.lwcode/settings.json` (auto-login on startup)
-5. Installs the LeekScript skill to `~/.lwcode/skills/leekscript.md`
-6. Creates a `CLAUDE.md` in your project directory if `.lk` files are detected
+> **Note:** Your regular `claude` stays untouched at `~/.claude/`. lwcode uses `~/.lwcode/` for its auth, settings, and session data.
 
 ---
 
@@ -46,35 +51,32 @@ lwcode -p "Write a kiter AI"  # Non-interactive mode
 > Write me a kiter AI that maintains max weapon range and retreats after attacking
 ```
 
-**Debug existing scripts:**
+**Debug and optimize:**
 ```
-> My AI is wasting TP — can you find the bug in main.lk?
+> Analyze my LeekScript code for bugs and optimization issues
+> Optimize my AI for competitive play — focus on TP/MP efficiency
 ```
 
-**Manage your account:**
+**Manage your LeekWars account (via MCP):**
 ```
 > Show my leeks and their stats
 > List my AI scripts
 > Pull the source code for main.lk
-> Save this AI and start a test fight against my garden opponents
-```
-
-**Optimize for competition:**
-```
-> /leek-optimize      # 3-agent parallel review of your AI
-> /leek-test          # Static analysis for common bugs
+> Start a test fight against my garden opponents
 ```
 
 ---
 
-## Available Skills
+## Skills
 
-| Command | What it does |
+Skills are auto-triggered based on context (when you're in a directory with `.lk` files). Ask naturally:
+
+| Ask for | What happens |
 |---------|-------------|
-| `/leekscript` | Full LeekScript API reference (197 functions, 400+ constants from source) |
-| `/leek-test` | Static analysis: null safety, TP waste, invalid syntax, non-existent functions |
-| `/leek-optimize` | Parallel optimization: operations efficiency, TP/MP usage, strategy review |
-| `/leek-sync` | Pull/push AI code between local `.lk` files and LeekWars |
+| "Analyze my code for bugs" | Static analysis: null safety, TP waste, non-existent functions, invalid syntax |
+| "Optimize my AI" | 3-agent parallel review: operations efficiency, TP/MP usage, strategy & tactics |
+| "Sync my code with LeekWars" | Pull/push AI code between local `.lk` files and the platform |
+| "Write a healer AI" | Full LeekScript API reference (197 functions, 400+ constants) loaded as context |
 
 ---
 
@@ -137,32 +139,20 @@ File extensions: `.lk`, `.leek`, `.ls`, `.lks`, `.leekscript`
 
 ```
 claude-code/
-├── build.sh                              # Build standalone lwcode binary
-├── setup.sh                              # Configure credentials + MCP server
-├── package.json                          # Dependencies (60+ npm packages)
-├── dist/lwcode                           # Compiled binary (after build.sh)
+├── patch-claude.sh                       # Create lwcode from stock claude binary
+├── setup.sh                              # Configure credentials + MCP + skills
 ├── mcp-leekwars-server/
 │   └── server.js                         # MCP server (17 LeekWars API tools)
 ├── .claude/skills/
-│   └── leekscript.md                     # Auto-trigger skill (installed globally by setup.sh)
+│   ├── leekscript.md                     # LeekScript API reference + language guide
+│   ├── leek-test.md                      # Static analysis skill
+│   ├── leek-optimize.md                  # 3-agent optimization review
+│   └── leek-sync.md                      # Platform sync skill
 ├── templates/
 │   └── CLAUDE.md.leekscript              # Project template
 ├── vendor/                               # Ground-truth references (git submodules)
 │   ├── leekscript/                       # LeekScript compiler source (Java)
-│   └── leek-wars-generator/              # Fight engine + game data (weapons, chips, constants)
-├── src/
-│   ├── entrypoints/cli.tsx               # CLI entrypoint
-│   ├── main.tsx                          # Main application (Commander.js CLI)
-│   ├── constants/prompts.ts              # System prompts (LeekWars-focused)
-│   ├── skills/bundled/
-│   │   ├── leekscript.ts                 # /leekscript skill
-│   │   ├── leekscript/
-│   │   │   ├── api-reference.md          # 197 functions, 400+ constants (from source)
-│   │   │   └── patterns.md              # 8 AI strategy patterns
-│   │   ├── leekTest.ts                   # /leek-test
-│   │   ├── leekSync.ts                   # /leek-sync
-│   │   └── leekOptimize.ts              # /leek-optimize
-│   └── utils/cliHighlight.ts             # LeekScript syntax highlighting
+│   └── leek-wars-generator/              # Fight engine + game data
 └── README.md
 ```
 
@@ -170,45 +160,31 @@ claude-code/
 
 ## Reference Submodules
 
-The API reference is generated from the actual game engine source, included as git submodules:
+The API reference is verified against the actual game engine source:
 
 | Submodule | Key files | What it provides |
 |-----------|-----------|------------------|
-| `vendor/leekscript` | `src/.../compiler/` | Definitive syntax reference (lexer, parser, token types) |
-| `vendor/leekscript` | `src/test/resources/ai/` | Example `.leek` test scripts |
-| `vendor/leek-wars-generator` | `src/.../FightFunctions.java` | All 197 API functions with exact signatures |
-| `vendor/leek-wars-generator` | `src/.../FightConstants.java` | All 400+ game constants |
+| `vendor/leekscript` | `src/.../compiler/` | Definitive syntax reference (lexer, parser) |
+| `vendor/leek-wars-generator` | `FightFunctions.java` | All 197 API functions with exact signatures |
+| `vendor/leek-wars-generator` | `FightConstants.java` | All 400+ game constants |
 | `vendor/leek-wars-generator` | `data/weapons.json` | Weapon stats |
 | `vendor/leek-wars-generator` | `data/chips.json` | Chip stats |
 | `vendor/leek-wars-generator` | `data/functions.json` | Operations cost per function |
 
-Claude reads these files directly when it needs to verify a function signature or constant value.
-
 ---
 
-## Build & Reconfigure
+## Reconfigure
 
 ```bash
-# Build standalone binary
-./build.sh                    # produces dist/lwcode (~116 MB)
-./build.sh 2.0.0              # custom version number
+# Re-patch after claude updates
+./patch-claude.sh && sudo cp dist/lwcode.js /usr/local/bin/lwcode
 
-# Change credentials
+# Change LeekWars credentials
 ./setup.sh NewUsername NewPassword
 
-# Or edit directly
-nano ~/.lwcode/leekwars-credentials.json
-
-# Manual MCP server test
-cd mcp-leekwars-server
-echo '{}' | LEEKWARS_LOGIN=You LEEKWARS_PASSWORD=Pass node server.js
+# Full reinstall
+./patch-claude.sh && ./setup.sh
 ```
-
-### Build requirements
-
-- [Bun](https://bun.sh/) 1.1+ (used for bundling and compilation)
-- ~2 GB disk space (node_modules + build output)
-- Build time: ~2 seconds
 
 ---
 
