@@ -33,16 +33,122 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 
 import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 
 const API_BASE = 'https://leekwars.com/api'
 let authToken = null
+
+// Cached name maps for weapons, chips, components (loaded lazily on first use)
+let weaponNameByItem = null      // item_template_id → human name
+let weaponNameByWeaponId = null  // weapon_id → human name (for SET_WEAPON actions)
+let chipNameById = null          // chip_id → human name (for leek equipment)
+let chipNameByTemplate = null    // chip_template → human name (for fight actions)
+let componentNameByTemplate = null  // component_template_id → { name, stats }
+
+const LEEKWARS_CLIENT_PATH = '/home/ubuntu/leek-wars'
+
+function loadItemNames() {
+  if (weaponNameByItem) return  // already loaded
+
+  // Load English locale files for human-readable names
+  let enChip = {}, enComp = {}
+  try {
+    enChip = JSON.parse(readFileSync(`${LEEKWARS_CLIENT_PATH}/src/lang/en/chip.json`, 'utf-8'))
+  } catch { /* fallback to raw names */ }
+  try {
+    enComp = JSON.parse(readFileSync(`${LEEKWARS_CLIENT_PATH}/src/lang/en/component.json`, 'utf-8'))
+  } catch { /* fallback to raw names */ }
+
+  // Weapons: fetch from API, build item_id → name and weapon_id → name maps
+  weaponNameByItem = {}
+  weaponNameByWeaponId = {}
+  try {
+    const weapData = apiRequest('GET', '/weapon/get-all')
+    const weapons = weapData.weapons || weapData
+    for (const [, w] of Object.entries(weapons)) {
+      const name = w.name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+      weaponNameByItem[w.item] = name
+      weaponNameByWeaponId[w.id] = name
+    }
+  } catch (e) {
+    process.stderr.write(`[leekwars-mcp] Failed to load weapons: ${e.message}\n`)
+  }
+
+  // Chips: fetch from API, build chip_id → name and template → name maps
+  chipNameById = {}
+  chipNameByTemplate = {}
+  try {
+    const chipData = apiRequest('GET', '/chip/get-all')
+    const chips = chipData.chips || chipData
+    for (const [cid, c] of Object.entries(chips)) {
+      const name = enChip[c.name] || c.name.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase())
+      chipNameById[Number(cid)] = name
+      if (c.template !== undefined) {
+        chipNameByTemplate[c.template] = name
+      }
+    }
+  } catch (e) {
+    process.stderr.write(`[leekwars-mcp] Failed to load chips: ${e.message}\n`)
+  }
+
+  // Components: parse from leek-wars client source (no API endpoint available)
+  componentNameByTemplate = {}
+  try {
+    const compSrc = readFileSync(`${LEEKWARS_CLIENT_PATH}/src/model/components.ts`, 'utf-8')
+    const regex = /name: '(\w+)',\s*stats:\s*(\[.*?\]),.*?template:\s*(\d+)/g
+    let match
+    while ((match = regex.exec(compSrc)) !== null) {
+      const [, nameKey, statsRaw, templateStr] = match
+      const statPairs = [...statsRaw.matchAll(/\[\s*'(\w+)',\s*(-?\d+)\s*\]/g)]
+        .map(m => `${m[1]}:${m[2]}`)
+        .join(', ')
+      componentNameByTemplate[Number(templateStr)] = {
+        name: enComp[nameKey] || nameKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        stats: statPairs,
+      }
+    }
+  } catch (e) {
+    process.stderr.write(`[leekwars-mcp] Failed to load components: ${e.message}\n`)
+  }
+
+  process.stderr.write(
+    `[leekwars-mcp] Loaded ${Object.keys(weaponNameByItem).length} weapons, ` +
+    `${Object.keys(chipNameById).length} chips, ` +
+    `${Object.keys(componentNameByTemplate).length} components\n`
+  )
+}
+
+function resolveWeaponName(itemTemplate) {
+  return weaponNameByItem?.[itemTemplate] || `Unknown(${itemTemplate})`
+}
+
+function resolveChipName(chipId) {
+  return chipNameById?.[chipId] || `Unknown(${chipId})`
+}
+
+function resolveComponentName(template) {
+  const c = componentNameByTemplate?.[template]
+  return c ? `${c.name} (${c.stats})` : `Unknown(${template})`
+}
 
 // Cookie jar file — the LeekWars API uses session cookies for auth.
 // curl's --cookie-jar / --cookie flags maintain session automatically,
 // matching the working Python `requests.Session()` approach.
 const COOKIE_JAR = '/tmp/leekwars-cookies.txt'
 
+let lastRequestTime = 0
+const MIN_REQUEST_INTERVAL = 350  // ms between API calls
+
 function apiRequest(method, path, body = null) {
+  // Throttle: ensure at least 350ms between requests
+  const now = Date.now()
+  const elapsed = now - lastRequestTime
+  if (elapsed < MIN_REQUEST_INTERVAL) {
+    const waitMs = MIN_REQUEST_INTERVAL - elapsed
+    execSync(`sleep ${(waitMs / 1000).toFixed(2)}`)
+  }
+  lastRequestTime = Date.now()
+
   const url = `${API_BASE}${path}`
 
   // Build curl command
@@ -258,6 +364,24 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {} },
   },
   {
+    name: 'leekwars_test_fight',
+    description:
+      'Run a test fight against a built-in bot (Domingo, Betalpha, Tisma, Guj, Hachess, Rex). Creates a test scenario, runs the fight, and returns results.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        leek_id: { type: 'number', description: 'Your leek ID' },
+        ai_id: { type: 'number', description: 'AI script ID to use' },
+        bot: {
+          type: 'string',
+          description: 'Bot opponent name',
+          enum: ['domingo', 'betalpha', 'tisma', 'guj', 'hachess', 'rex'],
+        },
+      },
+      required: ['leek_id', 'ai_id', 'bot'],
+    },
+  },
+  {
     name: 'leekwars_get_ranking',
     description: 'Get rankings.',
     inputSchema: {
@@ -360,24 +484,46 @@ async function handleToolCall(name, args) {
     }
 
     case 'leekwars_get_leek': {
+      loadItemNames()
       const result = await apiRequest('GET', `/leek/get/${args.leek_id}`)
       const leek = result.leek || result
-      return [
+
+      const weaponNames = (leek.weapons || []).map(w => resolveWeaponName(w.template))
+      const chipNames = (leek.chips || []).map(c => resolveChipName(c.template))
+      const compNames = (leek.components || []).map(c => resolveComponentName(c.template))
+
+      const lines = [
         `# ${leek.name} (ID: ${leek.id})`,
         `Level: ${leek.level}`,
         `Talent: ${leek.talent}`,
-        `Life: ${leek.life}`,
-        `Strength: ${leek.strength}`,
-        `Agility: ${leek.agility}`,
-        `Wisdom: ${leek.wisdom}`,
-        `Resistance: ${leek.resistance}`,
-        `Magic: ${leek.magic}`,
-        `Science: ${leek.science}`,
-        `Frequency: ${leek.frequency}`,
-        `AI: ${leek.ai_name || 'none'} (ID: ${leek.ai_id || 'none'})`,
-        `Weapons: ${JSON.stringify(leek.weapons || [])}`,
-        `Chips: ${JSON.stringify(leek.chips || [])}`,
-      ].join('\n')
+        `Ranking: ${leek.ranking ?? '?'}`,
+        ``,
+        `## Stats (base → total)`,
+        `Life: ${leek.life} → ${leek.total_life ?? leek.life}`,
+        `TP: ${leek.tp ?? '?'} → ${leek.total_tp ?? leek.tp ?? '?'}`,
+        `MP: ${leek.mp ?? '?'} → ${leek.total_mp ?? leek.mp ?? '?'}`,
+        `Strength: ${leek.strength} → ${leek.total_strength ?? leek.strength}`,
+        `Agility: ${leek.agility} → ${leek.total_agility ?? leek.agility}`,
+        `Wisdom: ${leek.wisdom} → ${leek.total_wisdom ?? leek.wisdom}`,
+        `Resistance: ${leek.resistance} → ${leek.total_resistance ?? leek.resistance}`,
+        `Magic: ${leek.magic} → ${leek.total_magic ?? leek.magic}`,
+        `Science: ${leek.science} → ${leek.total_science ?? leek.science}`,
+        `Frequency: ${leek.frequency} → ${leek.total_frequency ?? leek.frequency}`,
+        `Cores: ${leek.cores ?? '?'} → ${leek.total_cores ?? leek.cores ?? '?'}`,
+        `RAM: ${leek.ram ?? '?'} → ${leek.total_ram ?? leek.ram ?? '?'}`,
+        ``,
+        `AI: ${leek.ai?.name || 'none'} (ID: ${leek.ai?.id || 'none'})`,
+        ``,
+        `## Weapons`,
+        ...weaponNames.map(n => `- ${n}`),
+        ``,
+        `## Chips`,
+        chipNames.join(', '),
+        ``,
+        `## Components`,
+        ...compNames.map(n => `- ${n}`),
+      ]
+      return lines.join('\n')
     }
 
     case 'leekwars_set_leek_ai': {
@@ -472,6 +618,267 @@ async function handleToolCall(name, args) {
     case 'leekwars_get_constants': {
       const result = await apiRequest('GET', '/constant/get-all')
       return JSON.stringify(result, null, 2).slice(0, 5000) + '\n...(truncated)'
+    }
+
+    case 'leekwars_test_fight': {
+      const BOTS = {
+        domingo:  { id: -1, name: 'Domingo' },
+        betalpha: { id: -2, name: 'Betalpha' },
+        tisma:    { id: -3, name: 'Tisma' },
+        guj:      { id: -4, name: 'Guj' },
+        hachess:  { id: -5, name: 'Hachess' },
+        rex:      { id: -6, name: 'Rex' },
+      }
+      const bot = BOTS[args.bot]
+      if (!bot) throw new Error(`Unknown bot: ${args.bot}`)
+
+      // 1. Check for existing scenario with this AI + bot combo
+      const allScenarios = apiRequest('GET', '/test-scenario/get-all')
+      const scenarios = allScenarios.scenarios || {}
+      let scenarioId = null
+
+      for (const [sid, sc] of Object.entries(scenarios)) {
+        if (sc.ai === args.ai_id) {
+          const team2 = sc.team2 || []
+          if (team2.length > 0 && team2[0].id === bot.id) {
+            scenarioId = sid
+            break
+          }
+        }
+      }
+
+      // 2. Create scenario if none exists
+      if (!scenarioId) {
+        const newResult = apiRequest('POST', '/test-scenario/new', {
+          name: `MCP_${args.ai_id}_vs_${bot.name}`,
+        })
+        scenarioId = newResult.id
+        if (!scenarioId) throw new Error(`Failed to create scenario: ${JSON.stringify(newResult)}`)
+
+        // Configure scenario
+        apiRequest('POST', '/test-scenario/update', {
+          id: scenarioId,
+          data: JSON.stringify({ type: 0, map: null, ai: args.ai_id }),
+        })
+
+        // Add player leek to team 1
+        apiRequest('POST', '/test-scenario/add-leek', {
+          scenario_id: scenarioId,
+          leek: args.leek_id,
+          team: 0,
+          ai: args.ai_id,
+        })
+
+        // Add bot to team 2
+        apiRequest('POST', '/test-scenario/add-leek', {
+          scenario_id: scenarioId,
+          leek: bot.id,
+          team: 1,
+          ai: -2,  // normal bot AI
+        })
+      }
+
+      // 3. Run the fight (with retry for rate limits)
+      let fightId = null
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const fightResult = apiRequest('POST', '/ai/test-scenario', {
+          scenario_id: scenarioId,
+          ai_id: args.ai_id,
+        })
+        if (fightResult.fight) {
+          fightId = fightResult.fight
+          break
+        }
+        if (fightResult.error === 'rate_limit') {
+          const wait = (fightResult.retry_after || 2) + 1
+          execSync(`sleep ${wait}`)
+          continue
+        }
+        throw new Error(`Failed to start fight: ${JSON.stringify(fightResult)}`)
+      }
+      if (!fightId) throw new Error('Failed to start fight after retries (rate limited)')
+
+      // 4. Wait for fight to complete and fetch results
+      let fight = null
+      for (let i = 0; i < 10; i++) {
+        // Small delay via a sync sleep
+        execSync('sleep 1.5')
+        const fightData = apiRequest('GET', `/fight/get/${fightId}`)
+        fight = fightData.fight || fightData
+        if (fight.status === 2) break  // status 2 = finished
+      }
+
+      if (!fight || fight.status !== 2) {
+        return `Fight ${fightId} started but not yet finished. Check later with get_fight.`
+      }
+
+      // 5. Format results
+      const report = fight.report || {}
+      const data = fight.data || {}
+      const actions = data.actions || []
+      const entityList = data.leeks || []
+
+      // Build entity index → name map
+      const entityName = {}
+      for (const e of entityList) {
+        entityName[e.id] = e.name
+      }
+
+      const duration = report.duration ?? '?'
+      const winner = fight.winner === 1 ? 'Team 1 (You)' : fight.winner === 2 ? 'Team 2 (Bot)' : 'Draw'
+      const lines = [
+        `# Test Fight: ${fight.id}`,
+        `Result: **${winner}**`,
+        `Duration: ${duration} turns`,
+        ``,
+      ]
+
+      // Starting stats for each entity
+      if (entityList.length > 0) {
+        lines.push(`## Fighters`)
+        for (const e of entityList) {
+          const team = e.team === 1 ? 'You' : 'Bot'
+          lines.push(`- ${e.name} (${team}): HP=${e.life}, STR=${e.strength}, AGI=${e.agility}, WIS=${e.wisdom}, RES=${e.resistance}, MAG=${e.magic}, SCI=${e.science}, TP=${e.tp}, MP=${e.mp}`)
+        }
+        lines.push(``)
+      }
+
+      // Report: who died, who survived
+      if (report.leeks1 || report.leeks2) {
+        lines.push(`## Outcome`)
+        for (const l of [...(report.leeks1 || []), ...(report.leeks2 || [])]) {
+          const status = l.dead ? 'DEAD' : 'ALIVE'
+          lines.push(`- ${l.name}: ${status}`)
+        }
+        lines.push(``)
+      }
+
+      // Parse actions into a per-turn log
+      if (actions.length > 0) {
+        loadItemNames()
+
+        // weaponNameByWeaponId and chipNameByTemplate are loaded by loadItemNames() above
+
+        // Aggregate stats
+        const totalDamageDealt = {}
+        const totalDamageTaken = {}
+        const totalHealing = {}
+        const totalShielding = {}
+
+        // Track equipped weapon per entity
+        const equippedWeapon = {}
+
+        // Per-turn log
+        let turnNum = 1
+        let currentEntity = null
+        const turnLog = []
+        let currentTurnLines = []
+
+        for (const a of actions) {
+          const type = a[0]
+
+          if (type === 6) {
+            // NEW_TURN [6, turn_number]
+            if (currentTurnLines.length > 0) {
+              turnLog.push({ turn: turnNum, lines: currentTurnLines })
+            }
+            turnNum = a[1] ?? (turnNum + 1)
+            currentTurnLines = []
+          } else if (type === 7) {
+            // LEEK_TURN [7, entity_id]
+            currentEntity = a[1]
+            currentTurnLines.push(`  [${entityName[currentEntity] ?? currentEntity}]`)
+          } else if (type === 10) {
+            // MOVE [10, entity, dest_cell, [path]]
+            const steps = (a[3] || []).length
+            currentTurnLines.push(`    Move → cell ${a[2]} (${steps} steps)`)
+          } else if (type === 13) {
+            // SET_WEAPON [13, weapon_template_id]
+            const wName = weaponNameByWeaponId[a[1]] || `weapon(${a[1]})`
+            if (currentEntity !== null) equippedWeapon[currentEntity] = wName
+            currentTurnLines.push(`    Equip ${wName}`)
+          } else if (type === 16) {
+            // USE_WEAPON [16, target_cell, hit_count]
+            const wName = equippedWeapon[currentEntity] || 'weapon'
+            currentTurnLines.push(`    Attack cell ${a[1]} with ${wName} (${a[2] ?? '?'} hits)`)
+          } else if (type === 12) {
+            // USE_CHIP [12, chip_template, target_cell, success]
+            const cName = chipNameByTemplate?.[a[1]] || resolveChipName(a[1]) || `chip(${a[1]})`
+            const success = a[3] === 2 ? '' : a[3] === 1 ? ' (crit!)' : ' (failed)'
+            currentTurnLines.push(`    Use ${cName} on cell ${a[2] ?? '?'}${success}`)
+          } else if (type === 101) {
+            // LIFE_LOST [101, entity, amount, ???]
+            const target = entityName[a[1]] ?? a[1]
+            const amount = a[2] ?? 0
+            totalDamageTaken[a[1]] = (totalDamageTaken[a[1]] || 0) + amount
+            if (currentEntity !== undefined && currentEntity !== a[1]) {
+              totalDamageDealt[currentEntity] = (totalDamageDealt[currentEntity] || 0) + amount
+            }
+            currentTurnLines.push(`    ${target} lost ${amount} HP`)
+          } else if (type === 104) {
+            // HEAL [104, entity, amount]
+            const target = entityName[a[1]] ?? a[1]
+            const amount = a[2] ?? 0
+            totalHealing[a[1]] = (totalHealing[a[1]] || 0) + amount
+            currentTurnLines.push(`    ${target} healed ${amount} HP`)
+          } else if (type === 103) {
+            // LIFE_STEAL [103, entity, amount]
+            const target = entityName[a[1]] ?? a[1]
+            const amount = a[2] ?? 0
+            totalHealing[a[1]] = (totalHealing[a[1]] || 0) + amount
+            currentTurnLines.push(`    ${target} stole ${amount} HP`)
+          } else if (type === 108) {
+            // SHIELD [108, entity, amount, ???]
+            const target = entityName[a[1]] ?? a[1]
+            const amount = a[2] ?? 0
+            totalShielding[a[1]] = (totalShielding[a[1]] || 0) + amount
+            currentTurnLines.push(`    ${target} shielded ${amount}`)
+          } else if (type === 110) {
+            // POISON_DAMAGE [110, entity, amount]
+            const target = entityName[a[1]] ?? a[1]
+            const amount = a[2] ?? 0
+            totalDamageTaken[a[1]] = (totalDamageTaken[a[1]] || 0) + amount
+            currentTurnLines.push(`    ${target} took ${amount} poison damage`)
+          } else if (type === 5) {
+            // PLAYER_DEAD [5, entity, killer]
+            const target = entityName[a[1]] ?? a[1]
+            currentTurnLines.push(`    ** ${target} DIED **`)
+          } else if (type === 203) {
+            // SAY [203, message]
+            currentTurnLines.push(`    "${a[1]}"`)
+          } else if (type === 200) {
+            // SUMMON [200, ...]
+            currentTurnLines.push(`    Summoned a bulb`)
+          } else if (type === 1002) {
+            currentTurnLines.push(`    ⚠ BUG/CRASH`)
+          }
+          // Silently skip: 0(START), 8(END_TURN), 302(BUFF), 303(BUFF_EXPIRE)
+        }
+        // Push last turn
+        if (currentTurnLines.length > 0) {
+          turnLog.push({ turn: turnNum, lines: currentTurnLines })
+        }
+
+        // Summary stats
+        lines.push(`## Combat Stats`)
+        for (const e of entityList) {
+          const dmgDealt = totalDamageDealt[e.id] || 0
+          const dmgTaken = totalDamageTaken[e.id] || 0
+          const healed = totalHealing[e.id] || 0
+          const shielded = totalShielding[e.id] || 0
+          lines.push(`- ${e.name}: Dealt=${dmgDealt}, Taken=${dmgTaken}, Healed=${healed}, Shielded=${shielded}`)
+        }
+        lines.push(``)
+
+        // Full turn-by-turn log
+        lines.push(`## Turn-by-Turn Log`)
+        for (const t of turnLog) {
+          lines.push(`--- Turn ${t.turn} ---`)
+          lines.push(...t.lines)
+        }
+      }
+
+      return lines.join('\n')
     }
 
     case 'leekwars_get_ranking': {
