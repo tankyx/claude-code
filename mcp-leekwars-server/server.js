@@ -33,7 +33,8 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 
 import { execSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
+import { join as pathJoin } from 'node:path'
 
 const API_BASE = 'https://leekwars.com/api'
 let authToken = null
@@ -516,6 +517,25 @@ const TOOLS = [
         },
       },
       required: ['leek_id', 'ai_id', 'bot'],
+    },
+  },
+  {
+    name: 'leekwars_upload_v8',
+    description:
+      'Upload the V8 modular AI to LeekWars (creates 8.0/V8 folder structure, uploads all .lk modules and strategy/ subfolder, then re-saves main.lk to force server recompile). If "account" is provided, logs in fresh using credentials from /home/ubuntu/LeekWars-AI/tools/config.json; otherwise uses current session.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        account: {
+          type: 'string',
+          description: 'Account to upload to (reads tools/config.json). Omit to use current session.',
+          enum: ['main', 'cure'],
+        },
+        v8_dir: {
+          type: 'string',
+          description: 'Path to V8_modules directory (default: /home/ubuntu/LeekWars-AI/V8_modules)',
+        },
+      },
     },
   },
   {
@@ -1164,6 +1184,179 @@ async function handleToolCall(name, args) {
       }
 
       return lines.join('\n')
+    }
+
+    case 'leekwars_upload_v8': {
+      const v8Dir = args.v8_dir || '/home/ubuntu/LeekWars-AI/V8_modules'
+      if (!existsSync(v8Dir)) {
+        return `Error: V8_modules directory not found at ${v8Dir}`
+      }
+
+      // Optional account switch — login fresh from tools/config.json
+      if (args.account) {
+        const cfgPath = '/home/ubuntu/LeekWars-AI/tools/config.json'
+        if (!existsSync(cfgPath)) {
+          return `Error: config.json not found at ${cfgPath}`
+        }
+        const cfg = JSON.parse(readFileSync(cfgPath, 'utf-8'))
+        const acc = cfg.accounts?.[args.account]
+        if (!acc) {
+          return `Error: account "${args.account}" not found in config.json`
+        }
+        const loginRes = await apiRequest('POST', '/farmer/login-token', {
+          login: acc.email,
+          password: acc.password,
+        })
+        if (!loginRes.token) {
+          return `Login failed for account "${args.account}": ${JSON.stringify(loginRes)}`
+        }
+        authToken = loginRes.token
+      }
+
+      // Fetch existing folder/AI tree
+      const existing = await apiRequest('GET', '/ai/get-farmer-ais')
+      const existingFolders = existing.folders || []
+      const existingAis = existing.ais || []
+
+      const findFolder = (name, parentId) =>
+        existingFolders.find(f => f.name === name && f.folder === parentId)?.id || null
+      const findAi = (name, folderId) =>
+        existingAis.find(a => a.name === name && a.folder === folderId)?.id || null
+
+      const ensureFolder = async (name, parentId) => {
+        const existingId = findFolder(name, parentId)
+        if (existingId) return { id: existingId, created: false }
+        const res = await apiRequest('POST', '/ai-folder/new-name', {
+          folder_id: parentId,
+          name,
+        })
+        const newId = res.id
+        if (!newId) throw new Error(`Failed to create folder "${name}"`)
+        // Track locally so subsequent lookups work
+        existingFolders.push({ id: newId, name, folder: parentId })
+        return { id: newId, created: true }
+      }
+
+      const uploadFile = async (filename, code, folderId) => {
+        const aiId = findAi(filename, folderId)
+        if (aiId) {
+          await apiRequest('POST', '/ai/save', { ai_id: aiId, code })
+          return { id: aiId, action: 'updated' }
+        }
+        // Create with retry on rate-limit
+        let createRes = null
+        for (let attempt = 0; attempt < 3; attempt++) {
+          createRes = await apiRequest('POST', '/ai/new-name', {
+            folder_id: folderId,
+            version: 4,
+            name: filename,
+          })
+          if (createRes.ai?.id) break
+          // brief backoff before retry
+          execSync('sleep 2')
+        }
+        const newId = createRes?.ai?.id
+        if (!newId) throw new Error(`Failed to create "${filename}": ${JSON.stringify(createRes)}`)
+        await apiRequest('POST', '/ai/save', { ai_id: newId, code })
+        existingAis.push({ id: newId, name: filename, folder: folderId })
+        return { id: newId, action: 'created' }
+      }
+
+      const stats = { created: 0, updated: 0, failed: 0, files: [] }
+      const errors = []
+
+      // 1. Setup folders: 8.0/V8/[strategy, math]
+      const root80 = await ensureFolder('8.0', 0)
+      const v8Folder = await ensureFolder('V8', root80.id)
+
+      // 2. Upload all root-level .lk files (excluding .ga_backup)
+      const rootEntries = readdirSync(v8Dir)
+      const rootFiles = rootEntries
+        .filter(name => name.endsWith('.lk') && !name.includes('BACKUP'))
+        .sort()
+
+      for (const filename of rootFiles) {
+        const fullPath = pathJoin(v8Dir, filename)
+        if (!statSync(fullPath).isFile()) continue
+        try {
+          const code = readFileSync(fullPath, 'utf-8')
+          const r = await uploadFile(filename, code, v8Folder.id)
+          stats[r.action]++
+          stats.files.push(`  ${r.action === 'created' ? '+' : '~'} ${filename}`)
+        } catch (e) {
+          stats.failed++
+          errors.push(`${filename}: ${e.message}`)
+        }
+      }
+
+      // 3. Upload strategy/ subfolder
+      const strategyDir = pathJoin(v8Dir, 'strategy')
+      if (existsSync(strategyDir) && statSync(strategyDir).isDirectory()) {
+        const strategyFolder = await ensureFolder('strategy', v8Folder.id)
+        const stratFiles = readdirSync(strategyDir)
+          .filter(name => name.endsWith('.lk') && !name.includes('BACKUP'))
+          .sort()
+        for (const filename of stratFiles) {
+          try {
+            const code = readFileSync(pathJoin(strategyDir, filename), 'utf-8')
+            const r = await uploadFile(filename, code, strategyFolder.id)
+            stats[r.action]++
+            stats.files.push(`  ${r.action === 'created' ? '+' : '~'} strategy/${filename}`)
+          } catch (e) {
+            stats.failed++
+            errors.push(`strategy/${filename}: ${e.message}`)
+          }
+        }
+      }
+
+      // 4. Upload math/ subfolder if it exists
+      const mathDir = pathJoin(v8Dir, 'math')
+      if (existsSync(mathDir) && statSync(mathDir).isDirectory()) {
+        const mathFolder = await ensureFolder('math', v8Folder.id)
+        const mathFiles = readdirSync(mathDir)
+          .filter(name => name.endsWith('.lk'))
+          .sort()
+        for (const filename of mathFiles) {
+          try {
+            const code = readFileSync(pathJoin(mathDir, filename), 'utf-8')
+            const r = await uploadFile(filename, code, mathFolder.id)
+            stats[r.action]++
+            stats.files.push(`  ${r.action === 'created' ? '+' : '~'} math/${filename}`)
+          } catch (e) {
+            stats.failed++
+            errors.push(`math/${filename}: ${e.message}`)
+          }
+        }
+      }
+
+      // 5. Re-save main.lk with build timestamp to force server recompile
+      // (the generator caches compiled .lk and only checks the root file's mtime,
+      //  so we append a comment to guarantee the code differs)
+      let recompileMsg = ''
+      const mainPath = pathJoin(v8Dir, 'main.lk')
+      if (existsSync(mainPath)) {
+        const mainCode = readFileSync(mainPath, 'utf-8')
+        const ts = new Date().toISOString().replace(/[:.]/g, '-')
+        const stamped = mainCode.replace(/\s*$/, '') + `\n// build: ${ts}\n`
+        const mainAiId = findAi('main.lk', v8Folder.id)
+        if (mainAiId) {
+          await apiRequest('POST', '/ai/save', { ai_id: mainAiId, code: stamped })
+          recompileMsg = `\nRecompiled main.lk (id ${mainAiId}, build ${ts})`
+        }
+      }
+
+      const farmerInfo = args.account ? ` [account: ${args.account}]` : ''
+      const summary = [
+        `V8 upload complete${farmerInfo}`,
+        `Created: ${stats.created}, Updated: ${stats.updated}, Failed: ${stats.failed}`,
+        recompileMsg,
+        '',
+        ...stats.files,
+      ]
+      if (errors.length > 0) {
+        summary.push('', 'Errors:', ...errors.map(e => `  ${e}`))
+      }
+      return summary.join('\n')
     }
 
     case 'leekwars_get_ranking': {
