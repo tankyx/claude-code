@@ -33,7 +33,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 
 import { execSync } from 'node:child_process'
-import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync, statSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join as pathJoin } from 'node:path'
 
 const API_BASE = 'https://leekwars.com/api'
@@ -278,6 +278,7 @@ function apiRequest(method, path, body = null) {
     '-c', COOKIE_JAR,   // save cookies
   ]
 
+  let bodyFile = null
   if (method === 'POST') {
     args.push('-X', 'POST')
     if (body) {
@@ -285,20 +286,35 @@ function apiRequest(method, path, body = null) {
       for (const [key, value] of Object.entries(body)) {
         params.append(key, String(value))
       }
-      args.push('-d', params.toString())
+      const encoded = params.toString()
+      // Large bodies (e.g. uploading big .lk files) exceed argv size limit (E2BIG).
+      // Write to a temp file and use curl --data-binary @file instead.
+      if (encoded.length > 100000) {
+        bodyFile = `/tmp/leekwars-body-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`
+        writeFileSync(bodyFile, encoded)
+        args.push('--data-binary', `@${bodyFile}`)
+      } else {
+        args.push('-d', encoded)
+      }
     }
   }
 
   args.push(url)
 
-  // Shell-escape and execute
-  const cmd = args.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')
-  const result = execSync(cmd, { timeout: 20000, encoding: 'utf-8' })
-
   try {
-    return JSON.parse(result)
-  } catch {
-    throw new Error(`Invalid JSON response from ${method} ${path}: ${result.slice(0, 200)}`)
+    // Shell-escape and execute
+    const cmd = args.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(' ')
+    const result = execSync(cmd, { timeout: 30000, encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024 })
+
+    try {
+      return JSON.parse(result)
+    } catch {
+      throw new Error(`Invalid JSON response from ${method} ${path}: ${result.slice(0, 200)}`)
+    }
+  } finally {
+    if (bodyFile) {
+      try { unlinkSync(bodyFile) } catch { /* best-effort cleanup */ }
+    }
   }
 }
 
