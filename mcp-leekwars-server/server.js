@@ -38,6 +38,7 @@ import { join as pathJoin } from 'node:path'
 
 const API_BASE = 'https://leekwars.com/api'
 let authToken = null
+let currentFarmer = null  // cached from /farmer/login-token (has id, login, leeks, etc.)
 
 // Cached name maps for weapons, chips, components (loaded lazily on first use)
 let weaponNameByItem = null      // item_template_id → human name
@@ -615,6 +616,7 @@ async function handleToolCall(name, args) {
       if (result.token) {
         authToken = result.token
         const farmer = result.farmer || {}
+        currentFarmer = farmer
         return [
           `Login successful!`,
           `Farmer: ${farmer.login || 'unknown'} (ID: ${farmer.id || '?'})`,
@@ -969,19 +971,17 @@ async function handleToolCall(name, args) {
       const numFights = args.num_fights || 5
       const strategy = args.strategy || 'smart'
 
-      // Identify the current farmer to scope the DB and to determine fight results
-      let farmerInfo
-      try {
-        const farmerData = await apiRequest('GET', '/farmer/get')
-        farmerInfo = farmerData.farmer || farmerData
-      } catch (e) {
-        return `Error: failed to fetch farmer info (${e.message}). Login first via leekwars_login or leekwars_upload_v8.`
+      // Use the farmer info cached at login time. /farmer/get is unreliable
+      // (the existing leekwars_get_farmer handler also returns undefined),
+      // so we depend on currentFarmer being populated by login/auto-login.
+      if (!currentFarmer || !currentFarmer.id) {
+        return `Error: no cached farmer info. Run leekwars_login or leekwars_upload_v8 first to authenticate.`
       }
-      const farmerId = farmerInfo.id
-      const farmerName = farmerInfo.login || farmerInfo.name || `Farmer ${farmerId}`
-      // Pick any owned leek ID — used by determineFightResult to figure out which side we're on
-      const myLeeks = farmerInfo.leeks
-        ? (Array.isArray(farmerInfo.leeks) ? farmerInfo.leeks : Object.values(farmerInfo.leeks))
+      const farmerId = currentFarmer.id
+      const farmerName = currentFarmer.login || currentFarmer.name || `Farmer ${farmerId}`
+      // Pick any owned leek ID — determineFightResult uses it to figure out which side we're on
+      const myLeeks = currentFarmer.leeks
+        ? (Array.isArray(currentFarmer.leeks) ? currentFarmer.leeks : Object.values(currentFarmer.leeks))
         : []
       const myLeekId = myLeeks[0]?.id
       if (!myLeekId) {
@@ -1404,6 +1404,7 @@ async function handleToolCall(name, args) {
           return `Login failed for account "${args.account}": ${JSON.stringify(loginRes)}`
         }
         authToken = loginRes.token
+        currentFarmer = loginRes.farmer || null
       }
 
       // Fetch existing folder/AI tree
@@ -1618,6 +1619,7 @@ if (process.env.LEEKWARS_LOGIN && process.env.LEEKWARS_PASSWORD) {
     if (result.token) {
       authToken = result.token
       const farmer = result.farmer || {}
+      currentFarmer = farmer
       process.stderr.write(
         `[leekwars-mcp] Auto-logged in as ${farmer.login || 'unknown'} ` +
         `(${Object.keys(farmer.leeks || {}).length} leeks)\n`
