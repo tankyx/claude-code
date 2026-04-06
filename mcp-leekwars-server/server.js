@@ -210,6 +210,14 @@ function selectOpponent(categorized, strategy) {
   return pool[pool.length - 1]
 }
 
+function ensureFightDbSchema(dbPath) {
+  // Idempotent: creates tables if missing. Used by the farmer-fight DB which
+  // has no Python script seeding it on first use.
+  sqliteRun(dbPath, `CREATE TABLE IF NOT EXISTS fight_history (fight_id INTEGER PRIMARY KEY, opponent_id INTEGER, opponent_name TEXT, opponent_level INTEGER, result TEXT, fight_url TEXT, timestamp TEXT)`)
+  sqliteRun(dbPath, `CREATE TABLE IF NOT EXISTS opponent_stats (opponent_id INTEGER PRIMARY KEY, opponent_name TEXT, opponent_level INTEGER, wins INTEGER DEFAULT 0, losses INTEGER DEFAULT 0, draws INTEGER DEFAULT 0, total_fights INTEGER DEFAULT 0, win_rate REAL DEFAULT 0.0, last_fought TEXT, last_updated TEXT)`)
+  sqliteRun(dbPath, `CREATE INDEX IF NOT EXISTS idx_opponent_id ON fight_history(opponent_id)`)
+}
+
 function recordFight(dbPath, fightId, opponentId, opponentName, opponentLevel, result, fightUrl) {
   const now = new Date().toISOString()
   const safeName = opponentName.replace(/'/g, "''")
@@ -515,6 +523,22 @@ const TOOLS = [
         },
       },
       required: ['leek_id'],
+    },
+  },
+  {
+    name: 'leekwars_farmer_fights',
+    description:
+      'Run N farmer-vs-farmer team fights (all your leeks vs another farmer\'s whole team in one fight credit) with smart opponent selection based on per-farmer history DB. Stored separately from solo fights at farmer_fight_history_<farmer_id>.db.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        num_fights: { type: 'number', description: 'Number of fights to run (default 5)' },
+        strategy: {
+          type: 'string',
+          description: 'Opponent selection strategy',
+          enum: ['safe', 'smart', 'aggressive', 'adaptive'],
+        },
+      },
     },
   },
   {
@@ -931,6 +955,159 @@ async function handleToolCall(name, args) {
         ...results,
         ``,
         `## Database Stats`,
+        `Total fights tracked: ${after.total}`,
+        `Global win rate: ${globalWinRate}%`,
+        `Opponents tracked: ${trackedCount[0]?.c || 0}`,
+        `Beatable opponents: ${beatableCount[0]?.c || 0}`,
+        `Dangerous opponents: ${dangerousCount[0]?.c || 0}`,
+      ]
+
+      return lines.filter(l => l !== '').join('\n')
+    }
+
+    case 'leekwars_farmer_fights': {
+      const numFights = args.num_fights || 5
+      const strategy = args.strategy || 'smart'
+
+      // Identify the current farmer to scope the DB and to determine fight results
+      let farmerInfo
+      try {
+        const farmerData = await apiRequest('GET', '/farmer/get')
+        farmerInfo = farmerData.farmer || farmerData
+      } catch (e) {
+        return `Error: failed to fetch farmer info (${e.message}). Login first via leekwars_login or leekwars_upload_v8.`
+      }
+      const farmerId = farmerInfo.id
+      const farmerName = farmerInfo.login || farmerInfo.name || `Farmer ${farmerId}`
+      // Pick any owned leek ID — used by determineFightResult to figure out which side we're on
+      const myLeeks = farmerInfo.leeks
+        ? (Array.isArray(farmerInfo.leeks) ? farmerInfo.leeks : Object.values(farmerInfo.leeks))
+        : []
+      const myLeekId = myLeeks[0]?.id
+      if (!myLeekId) {
+        return `Error: farmer ${farmerName} has no leeks (cannot determine fight result side).`
+      }
+
+      const dbPath = `${FIGHT_DB_DIR}/farmer_fight_history_${farmerId}.db`
+      ensureFightDbSchema(dbPath)
+
+      const results = []
+      let wins = 0, losses = 0, draws = 0, errors = 0
+      let consecutiveFailures = 0
+
+      for (let i = 0; i < numFights && consecutiveFailures < 5; i++) {
+        // 1. Get farmer opponents
+        let opponents
+        try {
+          const oppData = await apiRequest('GET', '/garden/get-farmer-opponents')
+          opponents = oppData.opponents || []
+        } catch {
+          consecutiveFailures++
+          continue
+        }
+
+        if (opponents.length === 0) {
+          consecutiveFailures++
+          execSync('sleep 3')
+          continue
+        }
+
+        // 2. Smart selection (reuses opp.id as the categorization key — here it's a farmer_id)
+        const categorized = categorizeOpponents(opponents, dbPath)
+        const target = selectOpponent(categorized, strategy)
+        if (!target) {
+          consecutiveFailures++
+          continue
+        }
+
+        // 3. Start fight
+        let fightId
+        for (let retry = 0; retry < 3; retry++) {
+          try {
+            const fightResult = await apiRequest('POST', '/garden/start-farmer-fight', {
+              target_id: target.id,
+            })
+            if (fightResult.fight) {
+              fightId = fightResult.fight
+              break
+            }
+            if (fightResult.error === 'too_many_fights' || fightResult.error === 'no_more_fights') {
+              return [
+                `# Farmer Fights: ${farmerName}`,
+                `Stopped after ${i} fights: no more fights available`,
+                `Session: ${wins}W / ${losses}L / ${draws}D`,
+              ].join('\n')
+            }
+            if (fightResult.error === 'rate_limit') {
+              execSync(`sleep ${(fightResult.retry_after || 2) + 1}`)
+              continue
+            }
+          } catch { /* retry */ }
+          execSync('sleep 2')
+        }
+
+        if (!fightId) {
+          errors++
+          consecutiveFailures++
+          continue
+        }
+
+        // 4. Wait for the fight to finish
+        const fight = waitForFight(fightId)
+        if (!fight) {
+          errors++
+          consecutiveFailures++
+          continue
+        }
+
+        // 5. Determine result via any of our leek IDs
+        const result = determineFightResult(fight, myLeekId)
+        const fightUrl = `https://leekwars.com/fight/${fightId}`
+
+        if (result === 'WIN') wins++
+        else if (result === 'LOSS') losses++
+        else draws++
+
+        // 6. Record to DB (opponent_id == farmer_id here)
+        recordFight(dbPath, fightId, target.id, target.name, target.level || 0, result, fightUrl)
+
+        // 7. Build log line
+        const oppStats = getOpponentStats(dbPath, target.id)
+        const histStr = oppStats ? `[${oppStats.wins}W-${oppStats.losses}L, ${(oppStats.win_rate * 100).toFixed(0)}%]` : ''
+        results.push(`${result === 'WIN' ? 'W' : result === 'LOSS' ? 'L' : 'D'} vs ${target.name} (Lvl ${target.level || '?'}) ${histStr}`)
+
+        consecutiveFailures = 0
+      }
+
+      // Summary
+      const total = wins + losses + draws
+      const winRate = total > 0 ? ((wins / total) * 100).toFixed(1) : '0.0'
+
+      const statsAfter = sqliteQuery(dbPath,
+        `SELECT SUM(CASE WHEN result='WIN' THEN 1 ELSE 0 END) as wins, COUNT(*) as total FROM fight_history`)
+      const after = statsAfter[0] || { wins: 0, total: 0 }
+      const globalWinRate = after.total > 0 ? ((after.wins / after.total) * 100).toFixed(1) : '0.0'
+
+      const beatableCount = sqliteQuery(dbPath,
+        `SELECT COUNT(*) as c FROM opponent_stats WHERE win_rate >= 0.7 AND total_fights >= 2`)
+      const dangerousCount = sqliteQuery(dbPath,
+        `SELECT COUNT(*) as c FROM opponent_stats WHERE win_rate <= 0.3 AND total_fights >= 2`)
+      const trackedCount = sqliteQuery(dbPath,
+        `SELECT COUNT(*) as c FROM opponent_stats`)
+
+      const lines = [
+        `# Farmer Fights: ${farmerName}`,
+        `Strategy: ${strategy}`,
+        ``,
+        `## Session Results`,
+        `Fights: ${total}/${numFights}`,
+        `Record: ${wins}W / ${losses}L / ${draws}D (${winRate}% win rate)`,
+        errors > 0 ? `Errors: ${errors}` : '',
+        ``,
+        `## Fight Log`,
+        ...results,
+        ``,
+        `## Database Stats (farmer-vs-farmer)`,
         `Total fights tracked: ${after.total}`,
         `Global win rate: ${globalWinRate}%`,
         `Opponents tracked: ${trackedCount[0]?.c || 0}`,
