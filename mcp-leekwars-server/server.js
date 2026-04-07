@@ -824,6 +824,7 @@ async function handleToolCall(name, args) {
       const numFights = args.num_fights || 5
       const strategy = args.strategy || 'smart'
       const dbPath = `${FIGHT_DB_DIR}/fight_history_${leekId}.db`
+      ensureFightDbSchema(dbPath)
 
       // Get leek name for display
       let leekName = `Leek ${leekId}`
