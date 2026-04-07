@@ -260,6 +260,23 @@ function determineFightResult(fight, leekId) {
   return 'LOSS'
 }
 
+// Team fights store leeks1/leeks2 as arrays of IDs (not objects), and the
+// fight may include leeks owned by teammates as well as ours. This helper
+// accepts a Set of all owned leek IDs and detects which side at least one of
+// our leeks is on.
+function determineTeamFightResult(fight, ownedLeekIds) {
+  const normalize = (arr) => (arr || []).map(l => (typeof l === 'object' ? l.id : l))
+  const team1 = normalize(fight.leeks1)
+  const team2 = normalize(fight.leeks2)
+  const inTeam1 = team1.some(id => ownedLeekIds.has(id))
+  const inTeam2 = team2.some(id => ownedLeekIds.has(id))
+  if (fight.winner === 0) return 'DRAW'
+  if (inTeam1 && fight.winner === 1) return 'WIN'
+  if (inTeam2 && fight.winner === 2) return 'WIN'
+  if (!inTeam1 && !inTeam2) return 'UNKNOWN'  // none of our leeks in this fight?
+  return 'LOSS'
+}
+
 // Cookie jar file — the LeekWars API uses session cookies for auth.
 // curl's --cookie-jar / --cookie flags maintain session automatically,
 // matching the working Python `requests.Session()` approach.
@@ -524,6 +541,25 @@ const TOOLS = [
         },
       },
       required: ['leek_id'],
+    },
+  },
+  {
+    name: 'leekwars_team_fights',
+    description:
+      'Run team fights (6v6 multi-farmer composition battles) until each composition\'s daily pool is drained. Iterates over every "my_composition" returned by /garden/get, with smart opponent selection based on per-composition history (team_fight_history_<composition_id>.db).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        max_per_composition: {
+          type: 'number',
+          description: 'Maximum fights per composition (default 100, capped by daily pool)',
+        },
+        strategy: {
+          type: 'string',
+          description: 'Opponent selection strategy',
+          enum: ['safe', 'smart', 'aggressive', 'adaptive'],
+        },
+      },
     },
   },
   {
@@ -966,6 +1002,175 @@ async function handleToolCall(name, args) {
       ]
 
       return lines.filter(l => l !== '').join('\n')
+    }
+
+    case 'leekwars_team_fights': {
+      const maxPerComp = args.max_per_composition || 100
+      const strategy = args.strategy || 'smart'
+
+      if (!currentFarmer || !currentFarmer.id) {
+        return `Error: no cached farmer info. Run leekwars_login or leekwars_upload_v8 first.`
+      }
+      const farmerName = currentFarmer.login || currentFarmer.name || `Farmer ${currentFarmer.id}`
+
+      // Build a Set of all leek IDs we own — needed to detect which side we're on
+      // in 6v6 team fights that include teammate leeks.
+      const myLeeks = currentFarmer.leeks
+        ? (Array.isArray(currentFarmer.leeks) ? currentFarmer.leeks : Object.values(currentFarmer.leeks))
+        : []
+      const ownedLeekIds = new Set(myLeeks.map(l => l.id))
+      if (ownedLeekIds.size === 0) {
+        return `Error: farmer ${farmerName} has no leeks.`
+      }
+
+      // Fetch garden data for compositions
+      const gardenData = await apiRequest('GET', '/garden/get')
+      const garden = gardenData.garden || gardenData
+      const compositions = garden.my_compositions || []
+      if (compositions.length === 0) {
+        return `Error: no team compositions found (you may not be in a team).`
+      }
+
+      const compResults = []
+      let grandWins = 0, grandLosses = 0, grandDraws = 0, grandErrors = 0
+
+      for (const comp of compositions) {
+        const compId = comp.id
+        const compName = comp.name || `Comp_${compId}`
+        const availableFights = comp.fights || 0
+        const dbPath = `${FIGHT_DB_DIR}/team_fight_history_${compId}.db`
+        ensureFightDbSchema(dbPath)
+
+        if (availableFights === 0) {
+          compResults.push({
+            name: compName,
+            available: 0,
+            wins: 0, losses: 0, draws: 0, errors: 0,
+            log: ['(no fights available)'],
+          })
+          continue
+        }
+
+        const compLog = []
+        let wins = 0, losses = 0, draws = 0, errors = 0
+        let consecutiveFailures = 0
+        const targetCount = Math.min(availableFights, maxPerComp)
+
+        for (let i = 0; i < targetCount && consecutiveFailures < 5; i++) {
+          // 1. Get opponents for this composition
+          let opponents
+          try {
+            const oppData = await apiRequest('GET', `/garden/get-composition-opponents/${compId}`)
+            opponents = oppData.opponents || []
+          } catch {
+            consecutiveFailures++
+            continue
+          }
+          if (opponents.length === 0) {
+            consecutiveFailures++
+            execSync('sleep 3')
+            continue
+          }
+
+          // 2. Smart selection (opp.id is the opponent composition id)
+          const categorized = categorizeOpponents(opponents, dbPath)
+          const target = selectOpponent(categorized, strategy)
+          if (!target) {
+            consecutiveFailures++
+            continue
+          }
+
+          // 3. Start the team fight
+          let fightId
+          for (let retry = 0; retry < 3; retry++) {
+            try {
+              const fightResult = await apiRequest('POST', '/garden/start-team-fight', {
+                composition_id: compId,
+                target_id: target.id,
+              })
+              if (fightResult.fight) {
+                fightId = fightResult.fight
+                break
+              }
+              if (fightResult.error === 'too_many_fights' || fightResult.error === 'no_more_fights') {
+                consecutiveFailures = 99  // break the outer loop
+                break
+              }
+              if (fightResult.error === 'rate_limit') {
+                execSync(`sleep ${(fightResult.retry_after || 2) + 1}`)
+                continue
+              }
+            } catch { /* retry */ }
+            execSync('sleep 2')
+          }
+
+          if (!fightId) {
+            errors++
+            consecutiveFailures++
+            continue
+          }
+
+          // 4. Wait for the fight to finish
+          const fight = waitForFight(fightId)
+          if (!fight) {
+            errors++
+            consecutiveFailures++
+            continue
+          }
+
+          // 5. Determine result via owned-leeks set (handles ID-only or object arrays)
+          const result = determineTeamFightResult(fight, ownedLeekIds)
+          const fightUrl = `https://leekwars.com/fight/${fightId}`
+
+          if (result === 'WIN') wins++
+          else if (result === 'LOSS') losses++
+          else if (result === 'DRAW') draws++
+          else { errors++; continue }  // UNKNOWN — none of our leeks in this fight
+
+          // 6. Record (opponent_id == target composition id)
+          recordFight(dbPath, fightId, target.id, target.name, target.level || 0, result, fightUrl)
+
+          // 7. Build log line
+          const oppStats = getOpponentStats(dbPath, target.id)
+          const histStr = oppStats ? `[${oppStats.wins}W-${oppStats.losses}L, ${(oppStats.win_rate * 100).toFixed(0)}%]` : ''
+          compLog.push(`  ${result === 'WIN' ? 'W' : result === 'LOSS' ? 'L' : 'D'} vs ${target.name} (${target.team_name || ''}) ${histStr}`)
+
+          consecutiveFailures = 0
+        }
+
+        grandWins += wins
+        grandLosses += losses
+        grandDraws += draws
+        grandErrors += errors
+        compResults.push({ name: compName, available: availableFights, wins, losses, draws, errors, log: compLog })
+      }
+
+      // Build summary
+      const grandTotal = grandWins + grandLosses + grandDraws
+      const grandWinRate = grandTotal > 0 ? ((grandWins / grandTotal) * 100).toFixed(1) : '0.0'
+
+      const lines = [
+        `# Team Fights: ${farmerName}`,
+        `Strategy: ${strategy}`,
+        ``,
+        `## Overall`,
+        `Compositions processed: ${compositions.length}`,
+        `Total fights: ${grandTotal}`,
+        `Record: ${grandWins}W / ${grandLosses}L / ${grandDraws}D (${grandWinRate}% win rate)`,
+        grandErrors > 0 ? `Errors: ${grandErrors}` : '',
+        ``,
+        `## Per Composition`,
+      ]
+      for (const r of compResults) {
+        const total = r.wins + r.losses + r.draws
+        const wr = total > 0 ? ((r.wins / total) * 100).toFixed(1) : '0.0'
+        lines.push(`### ${r.name} (${r.available} available)`)
+        lines.push(`${r.wins}W / ${r.losses}L / ${r.draws}D (${wr}% win rate)`)
+        for (const line of r.log) lines.push(line)
+        lines.push(``)
+      }
+
+      return lines.filter(l => l !== null && l !== undefined).join('\n')
     }
 
     case 'leekwars_farmer_fights': {
