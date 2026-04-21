@@ -1613,63 +1613,35 @@ async function handleToolCall(name, args) {
         currentFarmer = loginRes.farmer || null
       }
 
-      // Fetch existing folder/AI tree
-      const existing = await apiRequest('GET', '/ai/get-farmer-ais')
-      const existingFolders = existing.folders || []
-      const existingAis = existing.ais || []
-
-      const findFolder = (name, parentId) =>
-        existingFolders.find(f => f.name === name && f.folder === parentId)?.id || null
-      const findAi = (name, folderId) =>
-        existingAis.find(a => a.name === name && a.folder === folderId)?.id || null
-
-      const ensureFolder = async (name, parentId) => {
-        const existingId = findFolder(name, parentId)
-        if (existingId) return { id: existingId, created: false }
-        const res = await apiRequest('POST', '/ai-folder/new-name', {
-          folder_id: parentId,
-          name,
-        })
-        const newId = res.id
-        if (!newId) throw new Error(`Failed to create folder "${name}"`)
-        // Track locally so subsequent lookups work
-        existingFolders.push({ id: newId, name, folder: parentId })
-        return { id: newId, created: true }
-      }
-
-      const uploadFile = async (filename, code, folderId) => {
-        const aiId = findAi(filename, folderId)
-        if (aiId) {
-          await apiRequest('POST', '/ai/save', { ai_id: aiId, code })
-          return { id: aiId, action: 'updated' }
-        }
-        // Create with retry on rate-limit
-        let createRes = null
-        for (let attempt = 0; attempt < 3; attempt++) {
-          createRes = await apiRequest('POST', '/ai/new-name', {
-            folder_id: folderId,
-            version: 4,
-            name: filename,
-          })
-          if (createRes.ai?.id) break
-          // brief backoff before retry
-          execSync('sleep 2')
-        }
-        const newId = createRes?.ai?.id
-        if (!newId) throw new Error(`Failed to create "${filename}": ${JSON.stringify(createRes)}`)
-        await apiRequest('POST', '/ai/save', { ai_id: newId, code })
-        existingAis.push({ id: newId, name: filename, folder: folderId })
-        return { id: newId, action: 'created' }
-      }
+      // Fetch existing ai_tree (new path-based API).
+      // Legacy /ai/get-farmer-ais was removed; file/folder inventory now lives
+      // under farmer.ai_tree with { files: [{path,...}], folders: [paths] }.
+      const farmerRes = await apiRequest('GET', '/farmer/get-from-token')
+      const aiTree = farmerRes?.farmer?.ai_tree || {}
+      const existingFiles = new Set((aiTree.files || []).map(f => f.path))
 
       const stats = { created: 0, updated: 0, failed: 0, files: [] }
       const errors = []
 
-      // 1. Setup folders: 8.0/V8/[strategy, math]
-      const root80 = await ensureFolder('8.0', 0)
-      const v8Folder = await ensureFolder('V8', root80.id)
+      // Single-endpoint write: /ai/write accepts a path and code, creates or
+      // updates in place. Folders are implied by the path — no separate
+      // folder-creation endpoint is needed for paths under existing roots
+      // (8.0/V8 already exists on both accounts).
+      const uploadFile = async (relativePath, code) => {
+        const serverPath = `8.0/V8/${relativePath}`
+        const action = existingFiles.has(serverPath) ? 'updated' : 'created'
+        const res = await apiRequest('POST', '/ai/write', {
+          path: serverPath,
+          code,
+        })
+        if (!res?.modified) {
+          throw new Error(`write failed for ${serverPath}: ${JSON.stringify(res)}`)
+        }
+        existingFiles.add(serverPath)
+        return { action, path: serverPath }
+      }
 
-      // 2. Upload all root-level .lk files (excluding .ga_backup)
+      // 1. Upload all root-level .lk files (excluding .ga_backup)
       const rootEntries = readdirSync(v8Dir)
       const rootFiles = rootEntries
         .filter(name => name.endsWith('.lk') && !name.includes('BACKUP'))
@@ -1680,7 +1652,7 @@ async function handleToolCall(name, args) {
         if (!statSync(fullPath).isFile()) continue
         try {
           const code = readFileSync(fullPath, 'utf-8')
-          const r = await uploadFile(filename, code, v8Folder.id)
+          const r = await uploadFile(filename, code)
           stats[r.action]++
           stats.files.push(`  ${r.action === 'created' ? '+' : '~'} ${filename}`)
         } catch (e) {
@@ -1689,17 +1661,16 @@ async function handleToolCall(name, args) {
         }
       }
 
-      // 3. Upload strategy/ subfolder
+      // 2. Upload strategy/ subfolder
       const strategyDir = pathJoin(v8Dir, 'strategy')
       if (existsSync(strategyDir) && statSync(strategyDir).isDirectory()) {
-        const strategyFolder = await ensureFolder('strategy', v8Folder.id)
         const stratFiles = readdirSync(strategyDir)
           .filter(name => name.endsWith('.lk') && !name.includes('BACKUP'))
           .sort()
         for (const filename of stratFiles) {
           try {
             const code = readFileSync(pathJoin(strategyDir, filename), 'utf-8')
-            const r = await uploadFile(filename, code, strategyFolder.id)
+            const r = await uploadFile(`strategy/${filename}`, code)
             stats[r.action]++
             stats.files.push(`  ${r.action === 'created' ? '+' : '~'} strategy/${filename}`)
           } catch (e) {
@@ -1709,17 +1680,16 @@ async function handleToolCall(name, args) {
         }
       }
 
-      // 4. Upload math/ subfolder if it exists
+      // 3. Upload math/ subfolder if it exists
       const mathDir = pathJoin(v8Dir, 'math')
       if (existsSync(mathDir) && statSync(mathDir).isDirectory()) {
-        const mathFolder = await ensureFolder('math', v8Folder.id)
         const mathFiles = readdirSync(mathDir)
           .filter(name => name.endsWith('.lk'))
           .sort()
         for (const filename of mathFiles) {
           try {
             const code = readFileSync(pathJoin(mathDir, filename), 'utf-8')
-            const r = await uploadFile(filename, code, mathFolder.id)
+            const r = await uploadFile(`math/${filename}`, code)
             stats[r.action]++
             stats.files.push(`  ${r.action === 'created' ? '+' : '~'} math/${filename}`)
           } catch (e) {
@@ -1729,7 +1699,7 @@ async function handleToolCall(name, args) {
         }
       }
 
-      // 5. Re-save main.lk with build timestamp to force server recompile
+      // 4. Re-save main.lk with build timestamp to force server recompile
       // (the generator caches compiled .lk and only checks the root file's mtime,
       //  so we append a comment to guarantee the code differs)
       let recompileMsg = ''
@@ -1738,10 +1708,13 @@ async function handleToolCall(name, args) {
         const mainCode = readFileSync(mainPath, 'utf-8')
         const ts = new Date().toISOString().replace(/[:.]/g, '-')
         const stamped = mainCode.replace(/\s*$/, '') + `\n// build: ${ts}\n`
-        const mainAiId = findAi('main.lk', v8Folder.id)
-        if (mainAiId) {
-          await apiRequest('POST', '/ai/save', { ai_id: mainAiId, code: stamped })
-          recompileMsg = `\nRecompiled main.lk (id ${mainAiId}, build ${ts})`
+        const mainServerPath = '8.0/V8/main.lk'
+        const res = await apiRequest('POST', '/ai/write', {
+          path: mainServerPath,
+          code: stamped,
+        })
+        if (res?.modified) {
+          recompileMsg = `\nRecompiled main.lk (path ${mainServerPath}, build ${ts})`
         }
       }
 
